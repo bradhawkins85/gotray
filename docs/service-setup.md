@@ -1,6 +1,6 @@
 # GoTray system context deployment
 
-This guide explains how to run GoTray as a privileged background service while keeping the tray icon available in every signed-in user session. The service owns the encrypted configuration file; user-session agents authenticate through a shared token before rendering the menu.
+This guide explains how to run GoTray as a privileged background service while keeping the tray icon available in every signed-in user session. The service owns the encrypted configuration file; a built-in session supervisor authenticates each desktop via a shared token before launching and monitoring the user-space tray agent.
 
 ## 1. Prepare shared configuration
 
@@ -14,11 +14,7 @@ This guide explains how to run GoTray as a privileged background service while k
 
 1. Run `scripts/install.sh` as root. The script builds the binary into `/opt/gotray`, creates a locked-down `gotray` system account, installs a `gotray.service` systemd unit, and seeds `/var/lib/gotray/config.enc`.
 2. Enable and start the service: `sudo systemctl enable --now gotray.service` (handled by the script).
-3. For each desktop user, launch the tray agent at login (GNOME/KDE autostart, XDG autostart entry, etc.):
-   ```bash
-   /opt/gotray/gotray tray
-   ```
-   The agent reads `GOTRAY_SERVICE_TOKEN` from `/etc/gotray/.env` by default; ensure the file is world-readable only if needed or copy minimal variables into a user-specific wrapper script. The tray does not require `GOTRAY_SECRET` when this token is supplied.
+3. No manual per-user configuration is required. The service queries `loginctl` to discover active graphical logins, creates a session-scoped token file inside `/run/user/<uid>`, and launches `gotray tray` with `DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, and other session variables set. When a user logs out the corresponding tray process is stopped automatically.
 
 ## 3. Windows (Service Control Manager + per-user agent)
 
@@ -31,11 +27,11 @@ This guide explains how to run GoTray as a privileged background service while k
    New-Service -Name GoTray -BinaryPathName '"C:\Program Files\GoTray\gotray.exe" serve' -DisplayName 'GoTray Service' -Description 'GoTray system context service' -StartupType Automatic
    Start-Service GoTray
    ```
-3. Deploy the tray agent via a user logon script or Group Policy Run entry:
+3. Until the Windows session supervisor ships, continue deploying the tray agent via a logon script or Group Policy Run entry:
    ```powershell
    Start-Process -FilePath 'C:\Program Files\GoTray\gotray.exe' -ArgumentList 'tray' -WindowStyle Hidden
    ```
-   The agent uses the same environment variables; store them in `C:\ProgramData\GoTray\gotray.env` and reference them from a small wrapper script if you prefer not to expose them directly.
+   Store the minimal environment (token, endpoint) in a protected location such as `C:\ProgramData\GoTray\gotray.env` and load it in the wrapper script.
 
 ## 4. macOS (launchd)
 
@@ -64,7 +60,7 @@ This guide explains how to run GoTray as a privileged background service while k
    </plist>
    ```
 3. Load the daemon: `sudo launchctl load /Library/LaunchDaemons/com.example.gotray.plist`.
-4. For each user, install a LaunchAgent (`~/Library/LaunchAgents/com.example.gotray.tray.plist`) with `ProgramArguments` set to `gotray tray` and environment variables referencing the shared token. Load it using `launchctl load ~/Library/LaunchAgents/com.example.gotray.tray.plist`.
+4. LaunchAgents remain the recommended way to start the tray per user on macOS until the launchd session supervisor lands. Install `~/Library/LaunchAgents/com.example.gotray.tray.plist` with `ProgramArguments` pointing to `gotray tray` and load it using `launchctl load ~/Library/LaunchAgents/com.example.gotray.tray.plist`.
 
 ## 5. Monitoring and troubleshooting
 

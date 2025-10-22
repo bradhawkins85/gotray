@@ -19,9 +19,12 @@ import (
 
 func main() {
 	log.SetFlags(0)
-	secret := os.Getenv("GOTRAY_SECRET")
+	secret := strings.TrimSpace(config.CompiledSecret)
 	if secret == "" {
-		log.Fatal("GOTRAY_SECRET environment variable is required")
+		secret = strings.TrimSpace(os.Getenv("GOTRAY_SECRET"))
+	}
+	if secret == "" {
+		log.Fatal("GOTRAY_SECRET secret is required; configure the GOTRAY_SECRET GitHub secret or set the GOTRAY_SECRET environment variable for local development")
 	}
 
 	cfg, err := config.Load(secret)

@@ -112,6 +112,12 @@ Remove an entry by its identifier:
 go run ./cmd/gotray delete --id c33ad357-0c0e-4efa-9e15-6f6cfb04f36b
 ```
 
+To clear the entire menu and start fresh, delete all items in one command:
+
+```
+go run ./cmd/gotray delete --all
+```
+
 ### Exit codes and errors
 
 All commands return a non-zero exit code on error and print a helpful message describing what went wrong (for example, missing required flags or an unknown identifier). This makes it safe to script changes in provisioning tools.

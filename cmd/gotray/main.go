@@ -202,8 +202,29 @@ func handleDelete(cfg *config.Config, secret string, args []string) error {
 	fs := newFlagSet("delete")
 	id := fs.String("id", "", "identifier of the menu item to delete")
 	label := fs.String("label", "", "label of the menu item to delete")
+	deleteAll := fs.Bool("all", false, "remove all menu items")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if *deleteAll {
+		if *id != "" || *label != "" {
+			return errors.New("--all cannot be combined with --id or --label")
+		}
+
+		count := len(cfg.Items)
+		if count == 0 {
+			fmt.Println("No menu items to delete")
+			return nil
+		}
+
+		cfg.Items = nil
+		if err := config.Save(cfg, secret); err != nil {
+			return err
+		}
+
+		fmt.Printf("Deleted all %d menu items\n", count)
+		return nil
 	}
 
 	if *id == "" && *label == "" {

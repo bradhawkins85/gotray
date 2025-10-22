@@ -2,7 +2,6 @@
 
 - 2025-10-22T02:06:00Z - Feature - Added hierarchical menu support with dedicated menu items and parent validation for nested tray structures.
 - 2025-10-22T02:05:00Z - Fix - Prioritize embedded secrets when deriving tray service tokens to keep CI-provisioned deployments consistent.
-- 2025-10-22T02:41:00Z - Feature - Added a session supervisor with secure token hand-off, automatic Linux desktop discovery, and unit coverage for tray restarts.
 - 2025-10-22T01:37:58Z - Fix - Allow tray agents to run with explicit service tokens so the system secret can remain in the service context.
 - 2025-10-22T01:22:45Z - Fix - Resolved tray runner build conflicts by consolidating platform tray management logic and restoring cross-platform compilation.
 - 2025-10-22T00:53:38Z - Feature - Reworked GoTray into a system-context service with authenticated per-session tray agents, cross-platform service documentation, and updated installers.

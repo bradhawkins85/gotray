@@ -30,7 +30,12 @@ export GOTRAY_SECRET="your-strong-passphrase"
 go run ./cmd/gotray serve
 ```
 
-Once the listener is healthy the service enumerates active desktop sessions (via `loginctl` on Linux) and spawns a per-user `gotray tray` agent with the appropriate desktop environment variables, a short-lived token file, and dropped privileges. Agents are restarted automatically on failure and torn down when the associated session logs out, so you no longer need separate autostart entries for each Linux desktop user. Windows and macOS builds continue to rely on their existing user-level launchers until their session providers land.
+In each interactive user session, launch the tray agent. The agent connects to the service using the shared IPC token and renders the menu for that desktop:
+
+```bash
+export GOTRAY_SERVICE_TOKEN="shared-token-from-service"
+go run ./cmd/gotray tray
+```
 
 When the tray starts for the first time the service seeds the configuration with a set of defaults. Any subsequent changes are encrypted with the secret you supplied.
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -16,7 +15,6 @@ import (
 	"github.com/example/gotray/internal/menu"
 	"github.com/example/gotray/internal/protocol"
 	"github.com/example/gotray/internal/security"
-	"github.com/example/gotray/internal/service/sessions"
 )
 
 // Service coordinates the system-level background process that brokers menu
@@ -28,38 +26,20 @@ type Service struct {
 
 	mu  sync.RWMutex
 	cfg *config.Config
-
-	sessionMgr     sessions.Manager
-	launchAgent    launchFunc
-	supervisor     *sessionSupervisor
-	supervisorOnce sync.Once
 }
 
 // New constructs a Service using the provided encryption secret.
 func New(secret string) (*Service, error) {
-	mgr, err := sessions.NewManager()
-	if err != nil && !errors.Is(err, sessions.ErrUnavailable) {
-		return nil, err
-	}
-	return newService(secret, mgr, launchAgentProcess)
-}
-
-func newService(secret string, mgr sessions.Manager, launcher launchFunc) (*Service, error) {
 	srv := &Service{
-		secret:      secret,
-		token:       security.ResolveServiceToken(secret),
-		endpoint:    ipc.DefaultEndpoint(),
-		sessionMgr:  mgr,
-		launchAgent: launcher,
+		secret:   secret,
+		token:    security.ResolveServiceToken(secret),
+		endpoint: ipc.DefaultEndpoint(),
 	}
 	if srv.token == "" {
 		return nil, fmt.Errorf("service token could not be resolved; set GOTRAY_SERVICE_TOKEN or GOTRAY_SECRET")
 	}
 
 	if _, err := srv.currentConfig(); err != nil {
-		if mgr != nil {
-			_ = mgr.Close()
-		}
 		return nil, err
 	}
 	return srv, nil
@@ -77,13 +57,8 @@ func (s *Service) Run(ctx context.Context) error {
 		return fmt.Errorf("listen on %s: %w", s.endpoint.String(), err)
 	}
 	defer listener.Close()
-	if s.sessionMgr != nil {
-		defer s.sessionMgr.Close()
-	}
 
 	log.Printf("GoTray service listening on %s", s.endpoint.String())
-
-	s.startSupervisor(ctx)
 
 	go func() {
 		<-ctx.Done()
@@ -145,17 +120,6 @@ func (s *Service) handleConnection(ctx context.Context, conn net.Conn) {
 	default:
 		_ = encoder.Encode(protocol.Response{Error: fmt.Sprintf("unknown command: %s", req.Command)})
 	}
-}
-
-func (s *Service) startSupervisor(ctx context.Context) {
-	if s.sessionMgr == nil || s.launchAgent == nil {
-		return
-	}
-	s.supervisorOnce.Do(func() {
-		sup := newSessionSupervisor(ctx, s.sessionMgr, s.launchAgent, s.token, s.endpoint.String())
-		s.supervisor = sup
-		go sup.run()
-	})
 }
 
 func (s *Service) authorize(token string) bool {

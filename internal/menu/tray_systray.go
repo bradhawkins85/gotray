@@ -42,21 +42,6 @@ func (c *systrayController) Run(ctx context.Context, updates <-chan []config.Men
 			}
 		}
 		systray.SetTooltip("GoTray")
-
-		quit := systray.AddMenuItem("Quit GoTray", "Exit the application")
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					systray.Quit()
-					return
-				case <-quit.ClickedCh:
-					systray.Quit()
-					return
-				}
-			}
-		}()
-
 		go c.listen(ctx, updates)
 	}, func() {
 		c.shutdown()
@@ -160,6 +145,23 @@ func (c *systrayController) addMenuItem(ctx context.Context, item config.MenuIte
 				}
 			}
 		}(mi.ClickedCh, item.Command, item.Arguments, item.WorkingDir)
+		return []trayEntry{{item: mi, cancel: cancel}}
+	case config.MenuItemQuit:
+		mi := c.makeMenuItem(parent, item)
+		ctxItem, cancel := context.WithCancel(ctx)
+		go func(ch <-chan struct{}) {
+			for {
+				select {
+				case <-ctxItem.Done():
+					return
+				case _, ok := <-ch:
+					if !ok {
+						return
+					}
+					systray.Quit()
+				}
+			}
+		}(mi.ClickedCh)
 		return []trayEntry{{item: mi, cancel: cancel}}
 	case config.MenuItemURL:
 		mi := c.makeMenuItem(parent, item)

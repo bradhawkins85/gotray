@@ -57,6 +57,8 @@ Supported `--type` values are:
 * `divider` – inserts a separator.
 * `command` – launches an executable.
 * `url` – opens the provided link in the default browser.
+* `menu` – creates a submenu container that can hold nested entries.
+* `quit` – closes the GoTray application when selected.
 
 Additional switches for `add`:
 

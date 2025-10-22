@@ -149,7 +149,7 @@ func normalizeCommand(arg string) string {
 
 func handleAdd(cfg *config.Config, secret string, args []string) error {
 	fs := newFlagSet("add")
-	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url, menu")
+	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url, menu, quit")
 	label := fs.String("label", "", "display label")
 	command := fs.String("command", "", "command or executable path")
 	argList := fs.String("args", "", "comma-separated command arguments")
@@ -440,6 +440,10 @@ func validateItem(item config.MenuItem) error {
 	case config.MenuItemDivider:
 		if item.Label == "" {
 			return errors.New("divider items require --label")
+		}
+	case config.MenuItemQuit:
+		if item.Label == "" {
+			return errors.New("quit items require --label")
 		}
 	default:
 		return fmt.Errorf("unsupported menu type: %s", item.Type)

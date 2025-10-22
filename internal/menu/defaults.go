@@ -30,12 +30,13 @@ func DefaultItems() []config.MenuItem {
 			UpdatedUTC:  now,
 		},
 		{
-			ID:         "30",
-			Order:      30,
-			Type:       config.MenuItemDivider,
-			Label:      "—",
-			CreatedUTC: now,
-			UpdatedUTC: now,
+			ID:          "30",
+			Order:       30,
+			Type:        config.MenuItemQuit,
+			Label:       "Quit GoTray",
+			Description: "Exit the GoTray application",
+			CreatedUTC:  now,
+			UpdatedUTC:  now,
 		},
 	}
 }

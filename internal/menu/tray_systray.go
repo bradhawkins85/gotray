@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
+	"sort"
 	"sync"
 
 	"github.com/getlantern/systray"
@@ -105,41 +106,46 @@ func (c *systrayController) render(ctx context.Context, items []config.MenuItem)
 		}
 	}
 
-	newEntries := make([]trayEntry, 0, len(items))
-	for _, item := range items {
-		if entry := c.addMenuItem(ctx, item); entry != nil {
-			newEntries = append(newEntries, *entry)
-		}
-	}
+	grouped := groupByParent(items)
+	newEntries := c.renderGroup(ctx, grouped, "", nil)
 
 	c.mu.Lock()
 	c.entries = newEntries
 	c.mu.Unlock()
 }
 
-func (c *systrayController) addMenuItem(ctx context.Context, item config.MenuItem) *trayEntry {
+func (c *systrayController) renderGroup(ctx context.Context, grouped map[string][]config.MenuItem, parentID string, parent *systray.MenuItem) []trayEntry {
+	entries := make([]trayEntry, 0)
+	for _, item := range grouped[parentID] {
+		entries = append(entries, c.addMenuItem(ctx, item, parent, grouped)...)
+	}
+	return entries
+}
+
+func (c *systrayController) addMenuItem(ctx context.Context, item config.MenuItem, parent *systray.MenuItem, grouped map[string][]config.MenuItem) []trayEntry {
 	switch item.Type {
 	case config.MenuItemDivider:
-		systray.AddSeparator()
-		return nil
-	case config.MenuItemText:
-		mi := systray.AddMenuItem(item.Label, item.Description)
+		if parent == nil {
+			systray.AddSeparator()
+			return nil
+		}
+		mi := parent.AddSubMenuItem("—", item.Description)
+		mi.Disable()
+		return []trayEntry{{item: mi, cancel: func() {}}}
+	case config.MenuItemMenu:
+		mi := c.makeMenuItem(parent, item)
 		ctxItem, cancel := context.WithCancel(ctx)
-		go func(ch <-chan struct{}) {
-			for {
-				select {
-				case <-ctxItem.Done():
-					return
-				case _, ok := <-ch:
-					if !ok {
-						return
-					}
-				}
-			}
-		}(mi.ClickedCh)
-		return &trayEntry{item: mi, cancel: cancel}
+		go drainClicks(ctxItem, mi.ClickedCh)
+		entries := []trayEntry{{item: mi, cancel: cancel}}
+		entries = append(entries, c.renderGroup(ctx, grouped, item.ID, mi)...)
+		return entries
+	case config.MenuItemText:
+		mi := c.makeMenuItem(parent, item)
+		ctxItem, cancel := context.WithCancel(ctx)
+		go drainClicks(ctxItem, mi.ClickedCh)
+		return []trayEntry{{item: mi, cancel: cancel}}
 	case config.MenuItemCommand:
-		mi := systray.AddMenuItem(item.Label, item.Description)
+		mi := c.makeMenuItem(parent, item)
 		ctxItem, cancel := context.WithCancel(ctx)
 		go func(ch <-chan struct{}, cmd string, args []string, dir string) {
 			for {
@@ -154,9 +160,9 @@ func (c *systrayController) addMenuItem(ctx context.Context, item config.MenuIte
 				}
 			}
 		}(mi.ClickedCh, item.Command, item.Arguments, item.WorkingDir)
-		return &trayEntry{item: mi, cancel: cancel}
+		return []trayEntry{{item: mi, cancel: cancel}}
 	case config.MenuItemURL:
-		mi := systray.AddMenuItem(item.Label, item.Description)
+		mi := c.makeMenuItem(parent, item)
 		ctxItem, cancel := context.WithCancel(ctx)
 		go func(ch <-chan struct{}, target string) {
 			for {
@@ -171,12 +177,52 @@ func (c *systrayController) addMenuItem(ctx context.Context, item config.MenuIte
 				}
 			}
 		}(mi.ClickedCh, item.URL)
-		return &trayEntry{item: mi, cancel: cancel}
+		return []trayEntry{{item: mi, cancel: cancel}}
 	default:
-		mi := systray.AddMenuItem(fmt.Sprintf("Unsupported: %s", item.Type), item.Description)
+		mi := c.makeMenuItem(parent, config.MenuItem{
+			Label:       fmt.Sprintf("Unsupported: %s", item.Type),
+			Description: item.Description,
+		})
 		mi.Disable()
-		return &trayEntry{item: mi, cancel: func() {}}
+		return []trayEntry{{item: mi, cancel: func() {}}}
 	}
+}
+
+func (c *systrayController) makeMenuItem(parent *systray.MenuItem, item config.MenuItem) *systray.MenuItem {
+	if parent == nil {
+		return systray.AddMenuItem(item.Label, item.Description)
+	}
+	return parent.AddSubMenuItem(item.Label, item.Description)
+}
+
+func drainClicks(ctx context.Context, ch <-chan struct{}) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-ch:
+			if !ok {
+				return
+			}
+		}
+	}
+}
+
+func groupByParent(items []config.MenuItem) map[string][]config.MenuItem {
+	grouped := make(map[string][]config.MenuItem)
+	for _, item := range items {
+		key := item.ParentID
+		grouped[key] = append(grouped[key], item)
+	}
+	for key := range grouped {
+		sort.SliceStable(grouped[key], func(i, j int) bool {
+			if grouped[key][i].Order == grouped[key][j].Order {
+				return grouped[key][i].ID < grouped[key][j].ID
+			}
+			return grouped[key][i].Order < grouped[key][j].Order
+		})
+	}
+	return grouped
 }
 
 func (c *systrayController) shutdown() {

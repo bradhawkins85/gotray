@@ -1,5 +1,6 @@
 # Change Log
 
+- 2025-10-22T02:06:00Z - Feature - Added hierarchical menu support with dedicated menu items and parent validation for nested tray structures.
 - 2025-10-22T02:05:00Z - Fix - Prioritize embedded secrets when deriving tray service tokens to keep CI-provisioned deployments consistent.
 - 2025-10-22T01:37:58Z - Fix - Allow tray agents to run with explicit service tokens so the system secret can remain in the service context.
 - 2025-10-22T01:22:45Z - Fix - Resolved tray runner build conflicts by consolidating platform tray management logic and restoring cross-platform compilation.

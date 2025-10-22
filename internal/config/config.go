@@ -29,6 +29,7 @@ const (
 	MenuItemDivider MenuItemType = "divider"
 	MenuItemCommand MenuItemType = "command"
 	MenuItemURL     MenuItemType = "url"
+	MenuItemMenu    MenuItemType = "menu"
 )
 
 // MenuItem represents a single menu entry in the tray.
@@ -42,6 +43,7 @@ type MenuItem struct {
 	WorkingDir  string       `json:"workingDir,omitempty"`
 	URL         string       `json:"url,omitempty"`
 	Description string       `json:"description,omitempty"`
+	ParentID    string       `json:"parentId,omitempty"`
 	CreatedUTC  string       `json:"createdUtc"`
 	UpdatedUTC  string       `json:"updatedUtc"`
 }

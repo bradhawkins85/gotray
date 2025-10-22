@@ -34,6 +34,7 @@ const (
 // MenuItem represents a single menu entry in the tray.
 type MenuItem struct {
 	ID          string       `json:"id"`
+	Order       int          `json:"order"`
 	Type        MenuItemType `json:"type"`
 	Label       string       `json:"label,omitempty"`
 	Command     string       `json:"command,omitempty"`

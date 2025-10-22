@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/example/gotray/internal/config"
 	"github.com/example/gotray/internal/menu"
@@ -46,6 +44,8 @@ func main() {
 		}
 	}
 
+	ensureSequentialOrder(&cfg.Items)
+
 	ctx := context.Background()
 	runner := menu.NewRunner(cfg)
 	if err := runner.Start(ctx); err != nil {
@@ -58,6 +58,8 @@ func handleCLI(cfg *config.Config, secret string, args []string) error {
 		return errors.New("no command provided")
 	}
 
+	ensureSequentialOrder(&cfg.Items)
+
 	command := normalizeCommand(args[0])
 	switch command {
 	case "add":
@@ -68,6 +70,8 @@ func handleCLI(cfg *config.Config, secret string, args []string) error {
 		return handleDelete(cfg, secret, args[1:])
 	case "list":
 		return handleList(cfg)
+	case "move":
+		return handleMove(cfg, secret, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -87,6 +91,7 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 	workDir := fs.String("workdir", "", "working directory for command execution")
 	url := fs.String("url", "", "target URL")
 	description := fs.String("description", "", "tooltip description")
+	position := fs.Int("position", 0, "1-based position where the item should be inserted; defaults to the end")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -94,7 +99,7 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	item := config.MenuItem{
-		ID:          uuid.NewString(),
+		ID:          generateID(cfg.Items),
 		Type:        config.MenuItemType(strings.ToLower(*itemType)),
 		Label:       *label,
 		Command:     *command,
@@ -110,12 +115,24 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 		return err
 	}
 
-	cfg.Items = append(cfg.Items, item)
+	idx := len(cfg.Items)
+	if *position > 0 {
+		idx = *position - 1
+		if idx < 0 {
+			idx = 0
+		}
+		if idx > len(cfg.Items) {
+			idx = len(cfg.Items)
+		}
+	}
+
+	cfg.Items = insertItem(cfg.Items, idx, item)
+	ensureSequentialOrder(&cfg.Items)
 	if err := config.Save(cfg, secret); err != nil {
 		return err
 	}
 
-	fmt.Printf("Added menu item %s of type %s\n", item.ID, item.Type)
+	fmt.Printf("Added menu item %s of type %s at position %d\n", item.ID, item.Type, idx+1)
 	return nil
 }
 
@@ -138,13 +155,7 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 		return errors.New("missing --id for update")
 	}
 
-	idx := -1
-	for i, item := range cfg.Items {
-		if item.ID == *id {
-			idx = i
-			break
-		}
-	}
+	idx := findItemIndexByID(cfg.Items, *id)
 	if idx == -1 {
 		return fmt.Errorf("item with id %s not found", *id)
 	}
@@ -178,6 +189,7 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 	}
 
 	cfg.Items[idx] = item
+	ensureSequentialOrder(&cfg.Items)
 	if err := config.Save(cfg, secret); err != nil {
 		return err
 	}
@@ -189,33 +201,95 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 func handleDelete(cfg *config.Config, secret string, args []string) error {
 	fs := newFlagSet("delete")
 	id := fs.String("id", "", "identifier of the menu item to delete")
+	label := fs.String("label", "", "label of the menu item to delete")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	if *id == "" {
-		return errors.New("missing --id for delete")
+	if *id == "" && *label == "" {
+		return errors.New("specify --id or --label for delete")
 	}
 
-	filtered := cfg.Items[:0]
-	removed := false
-	for _, item := range cfg.Items {
-		if item.ID == *id {
-			removed = true
-			continue
-		}
-		filtered = append(filtered, item)
+	descriptor := ""
+	idx := -1
+	if *id != "" {
+		idx = findItemIndexByID(cfg.Items, *id)
+		descriptor = fmt.Sprintf("id %s", *id)
 	}
-	if !removed {
-		return fmt.Errorf("item with id %s not found", *id)
+	if idx == -1 && *label != "" {
+		idx = findItemIndexByLabel(cfg.Items, *label)
+		descriptor = fmt.Sprintf("label %q", *label)
+	}
+	if idx == -1 {
+		return fmt.Errorf("item with %s not found", descriptor)
 	}
 
-	cfg.Items = append([]config.MenuItem(nil), filtered...)
+	removed := cfg.Items[idx]
+	cfg.Items = removeIndex(cfg.Items, idx)
+	ensureSequentialOrder(&cfg.Items)
 	if err := config.Save(cfg, secret); err != nil {
 		return err
 	}
 
-	fmt.Printf("Deleted menu item %s\n", *id)
+	if *id != "" {
+		fmt.Printf("Deleted menu item %s\n", removed.ID)
+	} else {
+		fmt.Printf("Deleted menu item %s with label %q\n", removed.ID, removed.Label)
+	}
+	return nil
+}
+
+func handleMove(cfg *config.Config, secret string, args []string) error {
+	fs := newFlagSet("move")
+	id := fs.String("id", "", "identifier of the menu item to move")
+	label := fs.String("label", "", "label of the menu item to move")
+	position := fs.Int("position", 0, "1-based position to move the item to")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *id == "" && *label == "" {
+		return errors.New("specify --id or --label for move")
+	}
+	if *position <= 0 {
+		return errors.New("--position must be greater than zero")
+	}
+
+	descriptor := ""
+	idx := -1
+	if *id != "" {
+		idx = findItemIndexByID(cfg.Items, *id)
+		descriptor = fmt.Sprintf("id %s", *id)
+	}
+	if idx == -1 && *label != "" {
+		idx = findItemIndexByLabel(cfg.Items, *label)
+		descriptor = fmt.Sprintf("label %q", *label)
+	}
+	if idx == -1 {
+		return fmt.Errorf("item with %s not found", descriptor)
+	}
+
+	item := cfg.Items[idx]
+	item.UpdatedUTC = time.Now().UTC().Format(time.RFC3339)
+
+	cfg.Items = removeIndex(cfg.Items, idx)
+
+	target := *position - 1
+	if target < 0 {
+		target = 0
+	}
+	if target > len(cfg.Items) {
+		target = len(cfg.Items)
+	}
+
+	cfg.Items = insertItem(cfg.Items, target, item)
+	ensureSequentialOrder(&cfg.Items)
+
+	if err := config.Save(cfg, secret); err != nil {
+		return err
+	}
+
+	fmt.Printf("Moved menu item %s to position %d\n", item.ID, target+1)
 	return nil
 }
 
@@ -225,13 +299,11 @@ func handleList(cfg *config.Config) error {
 		return nil
 	}
 
-	sort.Slice(cfg.Items, func(i, j int) bool {
-		return cfg.Items[i].CreatedUTC < cfg.Items[j].CreatedUTC
-	})
+	ensureSequentialOrder(&cfg.Items)
 
-	fmt.Printf("%-38s %-8s %-20s %-20s\n", "ID", "Type", "Label", "Updated (UTC)")
-	for _, item := range cfg.Items {
-		fmt.Printf("%-38s %-8s %-20s %-20s\n", item.ID, item.Type, truncate(item.Label, 20), item.UpdatedUTC)
+	fmt.Printf("%-5s %-38s %-8s %-20s %-20s\n", "Pos", "ID", "Type", "Label", "Updated (UTC)")
+	for idx, item := range cfg.Items {
+		fmt.Printf("%-5d %-38s %-8s %-20s %-20s\n", idx+1, item.ID, item.Type, truncate(item.Label, 20), item.UpdatedUTC)
 	}
 	return nil
 }
@@ -257,7 +329,9 @@ func validateItem(item config.MenuItem) error {
 			return errors.New("URL items require --url")
 		}
 	case config.MenuItemDivider:
-		// nothing required
+		if item.Label == "" {
+			return errors.New("divider items require --label")
+		}
 	default:
 		return fmt.Errorf("unsupported menu type: %s", item.Type)
 	}
@@ -293,4 +367,73 @@ func newFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 	return fs
+}
+
+func findItemIndexByID(items []config.MenuItem, id string) int {
+	for i := range items {
+		if items[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func findItemIndexByLabel(items []config.MenuItem, label string) int {
+	for i := range items {
+		if strings.EqualFold(items[i].Label, label) {
+			return i
+		}
+	}
+	return -1
+}
+
+func insertItem(items []config.MenuItem, index int, item config.MenuItem) []config.MenuItem {
+	if index < 0 {
+		index = 0
+	}
+	if index > len(items) {
+		index = len(items)
+	}
+
+	items = append(items, config.MenuItem{})
+	copy(items[index+1:], items[index:])
+	items[index] = item
+	return items
+}
+
+func removeIndex(items []config.MenuItem, index int) []config.MenuItem {
+	if index < 0 || index >= len(items) {
+		return items
+	}
+	return append(items[:index], items[index+1:]...)
+}
+
+func ensureSequentialOrder(items *[]config.MenuItem) {
+	if items == nil {
+		return
+	}
+	for i := range *items {
+		(*items)[i].Order = (i + 1) * 10
+	}
+}
+
+func generateID(items []config.MenuItem) string {
+	maxVal := 0
+	for _, item := range items {
+		if v, err := strconv.Atoi(item.ID); err == nil {
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+	}
+
+	if maxVal <= 0 {
+		return "10"
+	}
+
+	next := ((maxVal / 10) + 1) * 10
+	if next <= 0 {
+		next = 10
+	}
+	return strconv.Itoa(next)
 }

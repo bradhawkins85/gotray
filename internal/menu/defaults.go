@@ -11,7 +11,8 @@ func DefaultItems() []config.MenuItem {
 	now := time.Now().UTC().Format(time.RFC3339)
 	return []config.MenuItem{
 		{
-			ID:          "welcome",
+			ID:          "10",
+			Order:       10,
 			Type:        config.MenuItemText,
 			Label:       "GoTray",
 			Description: "GoTray is running",
@@ -19,7 +20,8 @@ func DefaultItems() []config.MenuItem {
 			UpdatedUTC:  now,
 		},
 		{
-			ID:          "docs",
+			ID:          "20",
+			Order:       20,
 			Type:        config.MenuItemURL,
 			Label:       "Visit Project",
 			URL:         "https://example.com",
@@ -28,8 +30,10 @@ func DefaultItems() []config.MenuItem {
 			UpdatedUTC:  now,
 		},
 		{
-			ID:         "divider",
+			ID:         "30",
+			Order:      30,
 			Type:       config.MenuItemDivider,
+			Label:      "—",
 			CreatedUTC: now,
 			UpdatedUTC: now,
 		},

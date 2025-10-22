@@ -6,7 +6,8 @@ SERVICE_NAME="gotray-dev"
 INSTALL_DIR="/opt/${APP_NAME}-dev"
 BIN_PATH="${INSTALL_DIR}/${APP_NAME}"
 ENV_FILE="/etc/${APP_NAME}/dev.env"
-CONFIG_PATH="/var/lib/${APP_NAME}-dev/config.enc"
+CONFIG_DIR="/var/lib/${APP_NAME}-dev"
+CONFIG_PATH="${CONFIG_DIR}/config.enc"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 log() {
@@ -36,8 +37,8 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 
 log "Creating development data directory"
-sudo mkdir -p "$(dirname "${CONFIG_PATH}")"
-sudo chown "$(whoami)":"$(whoami)" "$(dirname "${CONFIG_PATH}")"
+sudo mkdir -p "${CONFIG_DIR}"
+sudo chown "$(whoami)":"$(whoami)" "${CONFIG_DIR}"
 
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<SERVICE | sudo tee "${SERVICE_FILE}" >/dev/null
@@ -49,7 +50,7 @@ After=network.target
 Type=simple
 EnvironmentFile=${ENV_FILE}
 Environment=GOTRAY_CONFIG_PATH=${CONFIG_PATH}
-ExecStart=${BIN_PATH}
+ExecStart=${BIN_PATH} serve
 Restart=on-failure
 User=$(whoami)
 Group=$(whoami)

@@ -3,10 +3,13 @@ set -euo pipefail
 
 APP_NAME="gotray"
 SERVICE_NAME="gotray"
+SERVICE_USER="gotray"
+SERVICE_GROUP="gotray"
 INSTALL_DIR="/opt/${APP_NAME}"
 BIN_PATH="${INSTALL_DIR}/${APP_NAME}"
 ENV_FILE="/etc/${APP_NAME}/.env"
-CONFIG_PATH="/var/lib/${APP_NAME}/config.enc"
+CONFIG_DIR="/var/lib/${APP_NAME}"
+CONFIG_PATH="${CONFIG_DIR}/config.enc"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 log() {
@@ -43,6 +46,11 @@ mkdir -p "${INSTALL_DIR}"
 (cd "${REPO_DIR}" && go build -o "${BIN_PATH}" ./cmd/gotray)
 chmod 0755 "${BIN_PATH}"
 
+if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
+  log "Creating service account ${SERVICE_USER}"
+  sudo useradd --system --home "${CONFIG_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
+fi
+
 log "Preparing environment configuration"
 sudo mkdir -p "$(dirname "${ENV_FILE}")"
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -51,8 +59,8 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 
 log "Preparing data directory"
-sudo mkdir -p "$(dirname "${CONFIG_PATH}")"
-sudo chown "$(whoami)":"$(whoami)" "$(dirname "${CONFIG_PATH}")"
+sudo mkdir -p "${CONFIG_DIR}"
+sudo chown "${SERVICE_USER}":"${SERVICE_GROUP}" "${CONFIG_DIR}"
 
 log "Creating systemd service"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -65,14 +73,14 @@ After=network.target
 Type=simple
 EnvironmentFile=${ENV_FILE}
 Environment=GOTRAY_CONFIG_PATH=${CONFIG_PATH}
-ExecStart=${BIN_PATH}
+ExecStart=${BIN_PATH} serve
 Restart=on-failure
-User=$(whoami)
-Group=$(whoami)
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
 WorkingDirectory=${INSTALL_DIR}
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 SERVICE
 
 log "Reloading systemd daemon"

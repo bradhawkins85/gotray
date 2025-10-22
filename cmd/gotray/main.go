@@ -7,22 +7,46 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/example/gotray/internal/config"
 	"github.com/example/gotray/internal/menu"
+	"github.com/example/gotray/internal/service"
 )
 
 func main() {
 	log.SetFlags(0)
-	secret := strings.TrimSpace(config.CompiledSecret)
-	if secret == "" {
-		secret = strings.TrimSpace(os.Getenv("GOTRAY_SECRET"))
+	secret := resolveSecret()
+
+	args := os.Args[1:]
+	implicitMode := false
+	if len(args) == 0 {
+		implicitMode = true
+		mode := strings.TrimSpace(os.Getenv("GOTRAY_RUN_MODE"))
+		if mode == "" {
+			mode = "serve"
+		}
+		args = []string{mode}
 	}
-	if secret == "" {
-		log.Fatal("GOTRAY_SECRET secret is required; configure the GOTRAY_SECRET GitHub secret or set the GOTRAY_SECRET environment variable for local development")
+
+	switch normalizeCommand(args[0]) {
+	case "serve", "service":
+		if err := runService(secret); err != nil {
+			log.Fatalf("service exited with error: %v", err)
+		}
+		return
+	case "tray", "agent":
+		if err := runTray(secret); err != nil {
+			log.Fatalf("tray agent failed: %v", err)
+		}
+		return
+	}
+
+	if implicitMode {
+		log.Fatalf("unknown run mode %q; specify serve, tray, add, update, delete, list, or move", args[0])
 	}
 
 	cfg, err := config.Load(secret)
@@ -30,27 +54,52 @@ func main() {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 
-	if len(os.Args) > 1 {
-		if err := handleCLI(cfg, secret, os.Args[1:]); err != nil {
-			log.Fatalf("%v", err)
-		}
-		return
+	if err := handleCLI(cfg, secret, args); err != nil {
+		log.Fatalf("%v", err)
+	}
+}
+
+func runService(secret string) error {
+	srv, err := service.New(secret)
+	if err != nil {
+		return err
 	}
 
-	if len(cfg.Items) == 0 {
-		cfg.Items = menu.DefaultItems()
-		if err := config.Save(cfg, secret); err != nil {
-			log.Fatalf("failed to save default configuration: %v", err)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	if err := srv.Run(ctx); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
 		}
+		return err
 	}
+	return nil
+}
 
-	ensureSequentialOrder(&cfg.Items)
+func runTray(secret string) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
-	ctx := context.Background()
-	runner := menu.NewRunner(cfg)
+	runner := menu.NewRunner(secret)
 	if err := runner.Start(ctx); err != nil {
-		log.Fatalf("tray exited with error: %v", err)
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
 	}
+	return nil
+}
+
+func resolveSecret() string {
+	secret := strings.TrimSpace(config.CompiledSecret)
+	if secret == "" {
+		secret = strings.TrimSpace(os.Getenv("GOTRAY_SECRET"))
+	}
+	if secret == "" {
+		log.Fatal("GOTRAY_SECRET secret is required; configure the GOTRAY_SECRET GitHub secret or set the GOTRAY_SECRET environment variable for local development")
+	}
+	return secret
 }
 
 func handleCLI(cfg *config.Config, secret string, args []string) error {
@@ -58,7 +107,7 @@ func handleCLI(cfg *config.Config, secret string, args []string) error {
 		return errors.New("no command provided")
 	}
 
-	ensureSequentialOrder(&cfg.Items)
+	menu.EnsureSequentialOrder(&cfg.Items)
 
 	command := normalizeCommand(args[0])
 	switch command {
@@ -99,7 +148,7 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	item := config.MenuItem{
-		ID:          generateID(cfg.Items),
+		ID:          menu.GenerateID(cfg.Items),
 		Type:        config.MenuItemType(strings.ToLower(*itemType)),
 		Label:       *label,
 		Command:     *command,
@@ -126,8 +175,8 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 		}
 	}
 
-	cfg.Items = insertItem(cfg.Items, idx, item)
-	ensureSequentialOrder(&cfg.Items)
+	cfg.Items = menu.InsertItem(cfg.Items, idx, item)
+	menu.EnsureSequentialOrder(&cfg.Items)
 	if err := config.Save(cfg, secret); err != nil {
 		return err
 	}
@@ -189,7 +238,7 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 	}
 
 	cfg.Items[idx] = item
-	ensureSequentialOrder(&cfg.Items)
+	menu.EnsureSequentialOrder(&cfg.Items)
 	if err := config.Save(cfg, secret); err != nil {
 		return err
 	}
@@ -246,8 +295,8 @@ func handleDelete(cfg *config.Config, secret string, args []string) error {
 	}
 
 	removed := cfg.Items[idx]
-	cfg.Items = removeIndex(cfg.Items, idx)
-	ensureSequentialOrder(&cfg.Items)
+	cfg.Items = menu.RemoveIndex(cfg.Items, idx)
+	menu.EnsureSequentialOrder(&cfg.Items)
 	if err := config.Save(cfg, secret); err != nil {
 		return err
 	}
@@ -293,7 +342,7 @@ func handleMove(cfg *config.Config, secret string, args []string) error {
 	item := cfg.Items[idx]
 	item.UpdatedUTC = time.Now().UTC().Format(time.RFC3339)
 
-	cfg.Items = removeIndex(cfg.Items, idx)
+	cfg.Items = menu.RemoveIndex(cfg.Items, idx)
 
 	target := *position - 1
 	if target < 0 {
@@ -303,8 +352,8 @@ func handleMove(cfg *config.Config, secret string, args []string) error {
 		target = len(cfg.Items)
 	}
 
-	cfg.Items = insertItem(cfg.Items, target, item)
-	ensureSequentialOrder(&cfg.Items)
+	cfg.Items = menu.InsertItem(cfg.Items, target, item)
+	menu.EnsureSequentialOrder(&cfg.Items)
 
 	if err := config.Save(cfg, secret); err != nil {
 		return err
@@ -320,7 +369,7 @@ func handleList(cfg *config.Config) error {
 		return nil
 	}
 
-	ensureSequentialOrder(&cfg.Items)
+	menu.EnsureSequentialOrder(&cfg.Items)
 
 	fmt.Printf("%-5s %-38s %-8s %-20s %-20s\n", "Pos", "ID", "Type", "Label", "Updated (UTC)")
 	for idx, item := range cfg.Items {
@@ -406,55 +455,4 @@ func findItemIndexByLabel(items []config.MenuItem, label string) int {
 		}
 	}
 	return -1
-}
-
-func insertItem(items []config.MenuItem, index int, item config.MenuItem) []config.MenuItem {
-	if index < 0 {
-		index = 0
-	}
-	if index > len(items) {
-		index = len(items)
-	}
-
-	items = append(items, config.MenuItem{})
-	copy(items[index+1:], items[index:])
-	items[index] = item
-	return items
-}
-
-func removeIndex(items []config.MenuItem, index int) []config.MenuItem {
-	if index < 0 || index >= len(items) {
-		return items
-	}
-	return append(items[:index], items[index+1:]...)
-}
-
-func ensureSequentialOrder(items *[]config.MenuItem) {
-	if items == nil {
-		return
-	}
-	for i := range *items {
-		(*items)[i].Order = (i + 1) * 10
-	}
-}
-
-func generateID(items []config.MenuItem) string {
-	maxVal := 0
-	for _, item := range items {
-		if v, err := strconv.Atoi(item.ID); err == nil {
-			if v > maxVal {
-				maxVal = v
-			}
-		}
-	}
-
-	if maxVal <= 0 {
-		return "10"
-	}
-
-	next := ((maxVal / 10) + 1) * 10
-	if next <= 0 {
-		next = 10
-	}
-	return strconv.Itoa(next)
 }

@@ -1,5 +1,6 @@
 # Change Log
 
+- 2025-10-22T03:19:29Z - Fix - Restricted CI executable builds to the main branch to avoid unnecessary artifact generation on other branches.
 - 2025-10-22T03:12:01Z - Feature - Replaced hard-coded divider and quit entries with a configurable quit menu type and updated defaults.
 - 2025-10-22T02:06:00Z - Feature - Added hierarchical menu support with dedicated menu items and parent validation for nested tray structures.
 - 2025-10-22T02:05:00Z - Fix - Prioritize embedded secrets when deriving tray service tokens to keep CI-provisioned deployments consistent.

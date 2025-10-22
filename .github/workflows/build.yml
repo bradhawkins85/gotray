@@ -49,10 +49,15 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          GOTRAY_SECRET: ${{ secrets.GOTRAY_SECRET }}
         run: |
           mkdir -p dist
           output="dist/gotray-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          go build -trimpath -o "$output" ./cmd/gotray
+          if [ -n "${GOTRAY_SECRET}" ]; then
+            go build -trimpath -ldflags "-X github.com/example/gotray/internal/config.CompiledSecret=${GOTRAY_SECRET}" -o "$output" ./cmd/gotray
+          else
+            go build -trimpath -o "$output" ./cmd/gotray
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

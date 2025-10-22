@@ -149,7 +149,7 @@ func normalizeCommand(arg string) string {
 
 func handleAdd(cfg *config.Config, secret string, args []string) error {
 	fs := newFlagSet("add")
-	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url")
+	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url, menu")
 	label := fs.String("label", "", "display label")
 	command := fs.String("command", "", "command or executable path")
 	argList := fs.String("args", "", "comma-separated command arguments")
@@ -157,26 +157,34 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 	url := fs.String("url", "", "target URL")
 	description := fs.String("description", "", "tooltip description")
 	position := fs.Int("position", 0, "1-based position where the item should be inserted; defaults to the end")
+	parent := fs.String("parent", "", "parent menu id for nested items")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
+	normalizedType := config.MenuItemType(strings.ToLower(*itemType))
+	parentID := strings.TrimSpace(*parent)
 	item := config.MenuItem{
-		ID:          menu.GenerateID(cfg.Items),
-		Type:        config.MenuItemType(strings.ToLower(*itemType)),
+		ID:          menu.GenerateID(cfg.Items, parentID, normalizedType),
+		Type:        normalizedType,
 		Label:       *label,
 		Command:     *command,
 		Arguments:   parseList(*argList),
 		WorkingDir:  *workDir,
 		URL:         *url,
 		Description: *description,
+		ParentID:    parentID,
 		CreatedUTC:  now,
 		UpdatedUTC:  now,
 	}
 
 	if err := validateItem(item); err != nil {
+		return err
+	}
+
+	if err := menu.ValidateParent(cfg.Items, item); err != nil {
 		return err
 	}
 
@@ -211,6 +219,7 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 	workDir := fs.String("workdir", "", "working directory")
 	url := fs.String("url", "", "target URL")
 	description := fs.String("description", "", "tooltip description")
+	parent := fs.String("parent", "__unchanged__", "parent menu id (empty string for top level)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -247,9 +256,16 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 	if *description != "" {
 		item.Description = *description
 	}
+	if parent != nil && *parent != "__unchanged__" {
+		item.ParentID = strings.TrimSpace(*parent)
+	}
 	item.UpdatedUTC = time.Now().UTC().Format(time.RFC3339)
 
 	if err := validateItem(item); err != nil {
+		return err
+	}
+
+	if err := menu.ValidateParent(cfg.Items, item); err != nil {
 		return err
 	}
 
@@ -387,9 +403,9 @@ func handleList(cfg *config.Config) error {
 
 	menu.EnsureSequentialOrder(&cfg.Items)
 
-	fmt.Printf("%-5s %-38s %-8s %-20s %-20s\n", "Pos", "ID", "Type", "Label", "Updated (UTC)")
+	fmt.Printf("%-5s %-38s %-8s %-12s %-20s %-20s\n", "Pos", "ID", "Type", "Parent", "Label", "Updated (UTC)")
 	for idx, item := range cfg.Items {
-		fmt.Printf("%-5d %-38s %-8s %-20s %-20s\n", idx+1, item.ID, item.Type, truncate(item.Label, 20), item.UpdatedUTC)
+		fmt.Printf("%-5d %-38s %-8s %-12s %-20s %-20s\n", idx+1, item.ID, item.Type, truncate(item.ParentID, 12), truncate(item.Label, 20), item.UpdatedUTC)
 	}
 	return nil
 }
@@ -399,6 +415,13 @@ func validateItem(item config.MenuItem) error {
 	case config.MenuItemText:
 		if item.Label == "" {
 			return errors.New("text items require --label")
+		}
+	case config.MenuItemMenu:
+		if item.Label == "" {
+			return errors.New("menu items require --label")
+		}
+		if item.ParentID == "" {
+			return errors.New("menu items require --parent")
 		}
 	case config.MenuItemCommand:
 		if item.Label == "" {

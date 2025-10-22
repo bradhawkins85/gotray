@@ -6,9 +6,16 @@ package menu
 import (
 	"context"
 	"errors"
+
+	"github.com/example/gotray/internal/config"
 )
 
-// Start returns an error indicating tray functionality is unavailable without cgo.
-func (r *Runner) Start(_ context.Context) error {
+type trayUnsupported struct{}
+
+func newTrayController() trayController {
+	return trayUnsupported{}
+}
+
+func (trayUnsupported) Run(_ context.Context, _ <-chan []config.MenuItem) error {
 	return errors.New("system tray is unavailable without cgo support")
 }

@@ -1,3 +1,5 @@
+//go:build cgo || windows
+
 package menu
 
 import (
@@ -7,22 +9,11 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
-	"time"
 
 	"github.com/getlantern/systray"
 
 	"github.com/example/gotray/internal/config"
 )
-
-// Runner handles creation of systray menu items.
-type Runner struct {
-	config *config.Config
-}
-
-// NewRunner constructs a Runner with the given configuration.
-func NewRunner(cfg *config.Config) *Runner {
-	return &Runner{config: cfg}
-}
 
 // Start initializes the tray lifecycle.
 func (r *Runner) Start(ctx context.Context) error {
@@ -111,35 +102,5 @@ func openURL(raw string) {
 		_ = exec.Command("open", raw).Start()
 	default:
 		_ = exec.Command("xdg-open", raw).Start()
-	}
-}
-
-// DefaultItems returns baseline menu options when no configuration exists.
-func DefaultItems() []config.MenuItem {
-	now := time.Now().UTC().Format(time.RFC3339)
-	return []config.MenuItem{
-		{
-			ID:          "welcome",
-			Type:        config.MenuItemText,
-			Label:       "GoTray",
-			Description: "GoTray is running",
-			CreatedUTC:  now,
-			UpdatedUTC:  now,
-		},
-		{
-			ID:          "docs",
-			Type:        config.MenuItemURL,
-			Label:       "Visit Project",
-			URL:         "https://example.com",
-			Description: "Open the GoTray project page",
-			CreatedUTC:  now,
-			UpdatedUTC:  now,
-		},
-		{
-			ID:         "divider",
-			Type:       config.MenuItemDivider,
-			CreatedUTC: now,
-			UpdatedUTC: now,
-		},
 	}
 }

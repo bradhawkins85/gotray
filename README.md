@@ -1,15 +1,18 @@
 # GoTray
 
-GoTray is a cross-platform system tray helper written in Go. It encrypts its configuration on disk and can be driven entirely from the command line for scripted updates.
+GoTray is a cross-platform system tray helper written in Go. It encrypts its configuration on disk and can be driven entirely from the command line for scripted updates. Version 2 introduces a hardened system-service architecture: a privileged background process persists the menu configuration while lightweight per-session agents render the tray icon for signed-in users.
 
 ## Prerequisites
 
 * Go 1.21 or newer
 * A strong passphrase exported as the `GOTRAY_SECRET` environment variable. This secret is required every time the application starts because it encrypts and decrypts the menu configuration on disk.
 
-Optional environment variable:
+Optional environment variables:
 
 * `GOTRAY_CONFIG_PATH` – overrides the default configuration location. By default the encrypted file is stored in `~/.config/gotray/config.enc` (respecting your operating system's user configuration directory).
+* `GOTRAY_SERVICE_TOKEN` – explicit authentication token shared between the system service and user-session tray agent. When left empty the token is derived from `GOTRAY_SECRET` automatically.
+* `GOTRAY_SERVICE_ADDR` – override the loopback address/port used for IPC between the service and tray agent.
+* `GOTRAY_RUN_MODE` – set the default sub-command when no CLI arguments are supplied. Defaults to `serve` so the binary behaves as a long-running system service.
 
 You can copy `.env.example` and adjust it to suit your environment:
 
@@ -17,14 +20,24 @@ You can copy `.env.example` and adjust it to suit your environment:
 cp .env.example .env
 ```
 
-## Building and running the tray
+## Running the system service and tray agent
+
+First build and launch the background service. This process is intended to run as `root`, `SYSTEM`, or an equivalent service account:
 
 ```bash
 export GOTRAY_SECRET="your-strong-passphrase"
-go run ./cmd/gotray
+go run ./cmd/gotray serve
 ```
 
-When the tray starts for the first time it seeds the configuration with a set of defaults. Any subsequent changes are encrypted with the secret you supplied.
+In each interactive user session, launch the tray agent. The agent connects to the service using the shared IPC token and renders the menu for that desktop:
+
+```bash
+go run ./cmd/gotray tray
+```
+
+When the tray starts for the first time the service seeds the configuration with a set of defaults. Any subsequent changes are encrypted with the secret you supplied.
+
+Detailed platform-specific installation steps for Linux, macOS, and Windows live in [docs/service-setup.md](docs/service-setup.md).
 
 ## Command-line management
 

@@ -43,7 +43,7 @@ Detailed platform-specific installation steps for Linux, macOS, and Windows live
 
 ## Command-line management
 
-GoTray ships with a CLI that lets you manage menu items without opening a graphical interface. Execute the commands on the same host as the background service (or with direct access to its encrypted configuration) to edit the menu without interrupting running agents. Every command must be prefixed with the desired verb (`add`, `update`, `delete`, or `list`) followed by its switches. Flags accept either `--` or `-` prefixes as well as `/` prefixes on Windows.
+GoTray ships with a CLI that lets you manage menu items without opening a graphical interface. Execute the commands on the same host as the background service (or with direct access to its encrypted configuration) to edit the menu without interrupting running agents. Every command must be prefixed with the desired verb (`add`, `update`, `delete`, `list`, `move`, `export`, or `import`) followed by its switches. Flags accept either `--` or `-` prefixes as well as `/` prefixes on Windows.
 
 ### Adding items
 
@@ -85,7 +85,7 @@ go run ./cmd/gotray add \
 
 ### Listing items
 
-The `list` command prints the currently configured entries sorted by their creation timestamp.
+The `list` command prints the currently configured entries in their display order.
 
 ```
 go run ./cmd/gotray list
@@ -135,6 +135,30 @@ To clear the entire menu and start fresh, delete all items in one command:
 go run ./cmd/gotray delete --all
 ```
 
+### Exporting and importing menus
+
+Back up or move the entire menu structure with `export` and `import`. The configuration is serialized to JSON and wrapped in a Base64 string so it can be pasted safely into scripts or secrets managers.
+
+Export the current menu to stdout:
+
+```
+go run ./cmd/gotray export
+```
+
+Import a previously exported payload (replacing the current menu items):
+
+```
+go run ./cmd/gotray import --data "$(go run ./cmd/gotray export)"
+```
+
+You can also read the payload from a file:
+
+```
+go run ./cmd/gotray import --file backup.txt
+```
+
+During import the CLI validates every menu item and ensures parent-child relationships remain intact before encrypting the configuration again.
+
 ### Exit codes and errors
 
 All commands return a non-zero exit code on error and print a helpful message describing what went wrong (for example, missing required flags or an unknown identifier). This makes it safe to script changes in provisioning tools.
@@ -148,7 +172,7 @@ All commands return a non-zero exit code on error and print a helpful message de
 ## Troubleshooting
 
 * **"GOTRAY_SECRET environment variable is required"** – ensure the variable is exported before running the service or CLI commands. Tray agents may instead export `GOTRAY_SERVICE_TOKEN` when the secret should remain private.
-* **"unknown command" errors** – verify that you spelled the verb correctly (`add`, `update`, `delete`, `list`).
+* **"unknown command" errors** – verify that you spelled the verb correctly (`add`, `update`, `delete`, `list`, `move`, `export`, `import`).
 * **"item with id ... not found"** – use `go run ./cmd/gotray list` to confirm the identifier before updating or deleting.
 
 ## Development

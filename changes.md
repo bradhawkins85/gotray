@@ -1,5 +1,6 @@
 # Change Log
 
+- 2025-10-22T21:07:29Z - Feature - Added CLI commands to export and import menu configurations as Base64 strings, including documentation updates.
 - 2025-10-22T03:41:30Z - Feature - Documented how to manage menu entries against a running service, including secure CLI usage guidance.
 - 2025-10-22T03:19:29Z - Fix - Restricted CI executable builds to the main branch to avoid unnecessary artifact generation on other branches.
 - 2025-10-22T03:12:01Z - Feature - Replaced hard-coded divider and quit entries with a configurable quit menu type and updated defaults.

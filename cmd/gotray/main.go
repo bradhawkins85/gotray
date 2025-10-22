@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -48,7 +50,7 @@ func main() {
 	}
 
 	if implicitMode {
-		log.Fatalf("unknown run mode %q; specify serve, tray, add, update, delete, list, or move", args[0])
+		log.Fatalf("unknown run mode %q; specify serve, tray, add, update, delete, list, move, export, or import", args[0])
 	}
 
 	secret := resolveSecret()
@@ -137,6 +139,10 @@ func handleCLI(cfg *config.Config, secret string, args []string) error {
 		return handleList(cfg)
 	case "move":
 		return handleMove(cfg, secret, args[1:])
+	case "export":
+		return handleExport(cfg)
+	case "import":
+		return handleImport(cfg, secret, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -407,6 +413,100 @@ func handleList(cfg *config.Config) error {
 	for idx, item := range cfg.Items {
 		fmt.Printf("%-5d %-38s %-8s %-12s %-20s %-20s\n", idx+1, item.ID, item.Type, truncate(item.ParentID, 12), truncate(item.Label, 20), item.UpdatedUTC)
 	}
+	return nil
+}
+
+func handleExport(cfg *config.Config) error {
+	menu.EnsureSequentialOrder(&cfg.Items)
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal configuration: %w", err)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(data)
+	fmt.Println(encoded)
+	return nil
+}
+
+func handleImport(cfg *config.Config, secret string, args []string) error {
+	fs := newFlagSet("import")
+	dataFlag := fs.String("data", "", "base64-encoded configuration payload")
+	fileFlag := fs.String("file", "", "path to a file containing the base64 payload")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *dataFlag == "" && *fileFlag == "" {
+		return errors.New("provide --data or --file with the configuration payload")
+	}
+	if *dataFlag != "" && *fileFlag != "" {
+		return errors.New("--data cannot be combined with --file")
+	}
+
+	payload := strings.TrimSpace(*dataFlag)
+	if *fileFlag != "" {
+		content, err := os.ReadFile(*fileFlag)
+		if err != nil {
+			return fmt.Errorf("read payload file: %w", err)
+		}
+		payload = strings.TrimSpace(string(content))
+	}
+
+	if payload == "" {
+		return errors.New("configuration payload is empty")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return fmt.Errorf("decode payload: %w", err)
+	}
+
+	var imported config.Config
+	if err := json.Unmarshal(decoded, &imported); err != nil {
+		return fmt.Errorf("parse configuration: %w", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	seen := make(map[string]struct{})
+	for idx := range imported.Items {
+		item := imported.Items[idx]
+		if item.ID == "" {
+			return fmt.Errorf("imported item at position %d is missing an id", idx+1)
+		}
+		if _, exists := seen[item.ID]; exists {
+			return fmt.Errorf("duplicate menu item id %s in imported configuration", item.ID)
+		}
+		seen[item.ID] = struct{}{}
+
+		if item.CreatedUTC == "" {
+			item.CreatedUTC = now
+		}
+		if item.UpdatedUTC == "" {
+			item.UpdatedUTC = item.CreatedUTC
+		}
+
+		if err := validateItem(item); err != nil {
+			return fmt.Errorf("item %s invalid: %w", item.ID, err)
+		}
+
+		imported.Items[idx] = item
+	}
+
+	for _, item := range imported.Items {
+		if err := menu.ValidateParent(imported.Items, item); err != nil {
+			return fmt.Errorf("item %s invalid parent: %w", item.ID, err)
+		}
+	}
+
+	menu.EnsureSequentialOrder(&imported.Items)
+	cfg.Items = imported.Items
+	if err := config.Save(cfg, secret); err != nil {
+		return err
+	}
+
+	fmt.Printf("Imported %d menu items\n", len(cfg.Items))
 	return nil
 }
 

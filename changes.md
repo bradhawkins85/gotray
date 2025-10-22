@@ -1,5 +1,6 @@
 # Change Log
 
+- 2025-10-22T01:22:45Z - Fix - Resolved tray runner build conflicts by consolidating platform tray management logic and restoring cross-platform compilation.
 - 2025-10-22T00:53:38Z - Feature - Reworked GoTray into a system-context service with authenticated per-session tray agents, cross-platform service documentation, and updated installers.
 - 2025-10-22T00:43:27Z - Feature - Added CLI support for deleting all menu items with a single command.
 - 2025-10-22T01:02:50Z - Fix - Added legacy build tags to tray implementations to restore compatibility with older Go toolchains.

@@ -19,6 +19,10 @@ const defaultRefreshInterval = 30 * time.Second
 
 // Runner handles communication with the system service and synchronises menu
 // state for user-session tray processes.
+type trayController interface {
+	Run(ctx context.Context, updates <-chan []config.MenuItem) error
+}
+
 type Runner struct {
 	token           string
 	endpoint        ipc.Endpoint
@@ -26,15 +30,21 @@ type Runner struct {
 
 	mu        sync.RWMutex
 	lastItems []config.MenuItem
+
+	tray    trayController
+	updates chan []config.MenuItem
 }
 
 // NewRunner constructs a Runner that authenticates with the configured service.
 func NewRunner(secret string) *Runner {
-	return &Runner{
+	r := &Runner{
 		token:           security.ResolveServiceToken(secret),
 		endpoint:        ipc.DefaultEndpoint(),
 		refreshInterval: defaultRefreshInterval,
 	}
+	r.tray = newTrayController()
+	r.updates = make(chan []config.MenuItem, 1)
+	return r
 }
 
 // Start connects to the system service and periodically refreshes the menu
@@ -46,9 +56,26 @@ func (r *Runner) Start(ctx context.Context) error {
 
 	log.Printf("GoTray tray agent connecting to %s", r.endpoint.String())
 
+	var trayErr <-chan error
+	if r.tray != nil {
+		ch := make(chan error, 1)
+		trayErr = ch
+		go func() {
+			ch <- r.tray.Run(ctx, r.updates)
+		}()
+	}
+	defer func() {
+		if r.updates != nil {
+			close(r.updates)
+		}
+	}()
+
 	// Perform an initial sync before entering the refresh loop.
 	if err := r.syncOnce(ctx); err != nil {
 		log.Printf("initial sync failed: %v", err)
+	}
+	if len(r.LatestItems()) == 0 {
+		r.publish(nil)
 	}
 
 	ticker := time.NewTicker(r.refreshInterval)
@@ -63,6 +90,8 @@ func (r *Runner) Start(ctx context.Context) error {
 			if err := r.syncOnce(ctx); err != nil {
 				log.Printf("tray sync failed: %v", err)
 			}
+		case err := <-trayErr:
+			return err
 		}
 	}
 }
@@ -100,11 +129,41 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 		return errors.New(resp.Error)
 	}
 
-	r.mu.Lock()
-	r.lastItems = make([]config.MenuItem, len(resp.Items))
-	copy(r.lastItems, resp.Items)
-	r.mu.Unlock()
-
+	r.setItems(resp.Items)
 	log.Printf("GoTray tray agent synchronized %d menu items", len(resp.Items))
 	return nil
+}
+
+func (r *Runner) setItems(items []config.MenuItem) {
+	r.mu.Lock()
+	r.lastItems = make([]config.MenuItem, len(items))
+	copy(r.lastItems, items)
+	r.mu.Unlock()
+	r.publish(items)
+}
+
+func (r *Runner) publish(items []config.MenuItem) {
+	if r.updates == nil {
+		return
+	}
+
+	if len(items) == 0 {
+		items = DefaultItems()
+	}
+
+	payload := make([]config.MenuItem, len(items))
+	copy(payload, items)
+
+	select {
+	case r.updates <- payload:
+	default:
+		select {
+		case <-r.updates:
+		default:
+		}
+		select {
+		case r.updates <- payload:
+		default:
+		}
+	}
 }

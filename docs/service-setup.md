@@ -75,3 +75,27 @@ This guide explains how to run GoTray as a privileged background service while k
 ## 6. Development sandbox
 
 Use `scripts/install_dev.sh` to deploy a secondary service alongside production. It installs its assets into `/opt/gotray-dev`, reads environment variables from `/etc/gotray/dev.env`, and keeps data in `/var/lib/gotray-dev/config.enc` so production data remains untouched.
+
+## 7. Editing menu entries on the running service
+
+Once the background service is in place you can safely edit the encrypted menu without stopping the daemon. All write operations are performed through the CLI on the service host; the daemon reloads the file on demand and shares the updated entries with connected tray agents.
+
+1. **Authenticate using the service secret.**
+   * Source the environment file that the installer created (for example `/etc/gotray/.env` or `/etc/gotray/dev.env`).
+   * Ensure `GOTRAY_SECRET` is exported before invoking any CLI verb. The edit commands must be executed with the same privileges as the service account or an administrator so the encrypted config file remains protected.
+2. **Point the CLI at the service-owned config file.**
+   * By default the installers place the encrypted configuration at `/var/lib/gotray/config.enc` (or `/var/lib/gotray-dev/config.enc` in the sandbox). If you customised the location, set `GOTRAY_CONFIG_PATH` to match before running any commands.
+3. **Use the management verbs to review and edit entries.**
+   * List the current menu to confirm identifiers and hierarchy:
+
+     ```bash
+     sudo --preserve-env=GOTRAY_SECRET -u gotray \
+       GOTRAY_CONFIG_PATH=/var/lib/gotray/config.enc \
+       /opt/gotray/gotray list
+     ```
+
+   * Update existing items by referencing their `--id` and providing only the fields that should change. Add new entries or delete unused ones with the `add` and `delete` verbs. The CLI performs validation before writing the encrypted file, and the service will serve the refreshed menu to agents immediately.
+4. **Audit and restrict access.**
+   * Keep the environment file readable only by trusted administrators, rotate `GOTRAY_SECRET` if exposure is suspected, and prefer running the CLI over SSH on the service host rather than copying the secret elsewhere.
+
+Refer to [README.md](../README.md#command-line-management) for detailed flag descriptions and additional command examples.

@@ -43,7 +43,7 @@ Detailed platform-specific installation steps for Linux, macOS, and Windows live
 
 ## Command-line management
 
-GoTray ships with a CLI that lets you manage menu items without opening a graphical interface. Every command must be prefixed with the desired verb (`add`, `update`, `delete`, or `list`) followed by its switches. Flags accept either `--` or `-` prefixes as well as `/` prefixes on Windows.
+GoTray ships with a CLI that lets you manage menu items without opening a graphical interface. Execute the commands on the same host as the background service (or with direct access to its encrypted configuration) to edit the menu without interrupting running agents. Every command must be prefixed with the desired verb (`add`, `update`, `delete`, or `list`) followed by its switches. Flags accept either `--` or `-` prefixes as well as `/` prefixes on Windows.
 
 ### Adding items
 

@@ -5,7 +5,8 @@ GoTray is a cross-platform system tray helper written in Go. It encrypts its con
 ## Prerequisites
 
 * Go 1.21 or newer
-* A strong passphrase exported as the `GOTRAY_SECRET` environment variable. This secret is required every time the application starts because it encrypts and decrypts the menu configuration on disk.
+* A strong passphrase exported as the `GOTRAY_SECRET` environment variable when running the system service or CLI commands. This secret encrypts and decrypts the menu configuration on disk.
+* User-session tray agents may omit `GOTRAY_SECRET` as long as `GOTRAY_SERVICE_TOKEN` is provided.
 
 Optional environment variables:
 
@@ -32,6 +33,7 @@ go run ./cmd/gotray serve
 In each interactive user session, launch the tray agent. The agent connects to the service using the shared IPC token and renders the menu for that desktop:
 
 ```bash
+export GOTRAY_SERVICE_TOKEN="shared-token-from-service"
 go run ./cmd/gotray tray
 ```
 
@@ -143,7 +145,7 @@ All commands return a non-zero exit code on error and print a helpful message de
 
 ## Troubleshooting
 
-* **"GOTRAY_SECRET environment variable is required"** – ensure the variable is exported before running any command.
+* **"GOTRAY_SECRET environment variable is required"** – ensure the variable is exported before running the service or CLI commands. Tray agents may instead export `GOTRAY_SERVICE_TOKEN` when the secret should remain private.
 * **"unknown command" errors** – verify that you spelled the verb correctly (`add`, `update`, `delete`, `list`).
 * **"item with id ... not found"** – use `go run ./cmd/gotray list` to confirm the identifier before updating or deleting.
 

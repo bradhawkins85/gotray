@@ -14,12 +14,12 @@ import (
 
 	"github.com/example/gotray/internal/config"
 	"github.com/example/gotray/internal/menu"
+	"github.com/example/gotray/internal/security"
 	"github.com/example/gotray/internal/service"
 )
 
 func main() {
 	log.SetFlags(0)
-	secret := resolveSecret()
 
 	args := os.Args[1:]
 	implicitMode := false
@@ -34,11 +34,13 @@ func main() {
 
 	switch normalizeCommand(args[0]) {
 	case "serve", "service":
+		secret := resolveSecret()
 		if err := runService(secret); err != nil {
 			log.Fatalf("service exited with error: %v", err)
 		}
 		return
 	case "tray", "agent":
+		secret := resolveTraySecret()
 		if err := runTray(secret); err != nil {
 			log.Fatalf("tray agent failed: %v", err)
 		}
@@ -49,6 +51,7 @@ func main() {
 		log.Fatalf("unknown run mode %q; specify serve, tray, add, update, delete, list, or move", args[0])
 	}
 
+	secret := resolveSecret()
 	cfg, err := config.Load(secret)
 	if err != nil {
 		log.Fatalf("failed to load configuration: %v", err)
@@ -89,6 +92,19 @@ func runTray(secret string) error {
 		return err
 	}
 	return nil
+}
+
+func resolveTraySecret() string {
+	secret := strings.TrimSpace(config.CompiledSecret)
+	if secret == "" {
+		secret = strings.TrimSpace(os.Getenv("GOTRAY_SECRET"))
+	}
+
+	if security.ResolveServiceToken(secret) == "" {
+		log.Fatal("tray agent requires GOTRAY_SERVICE_TOKEN or GOTRAY_SECRET environment variable")
+	}
+
+	return secret
 }
 
 func resolveSecret() string {

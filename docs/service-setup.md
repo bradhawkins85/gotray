@@ -18,7 +18,7 @@ This guide explains how to run GoTray as a privileged background service while k
    ```bash
    /opt/gotray/gotray tray
    ```
-   The agent reads `GOTRAY_SERVICE_TOKEN` from `/etc/gotray/.env` by default; ensure the file is world-readable only if needed or copy minimal variables into a user-specific wrapper script.
+   The agent reads `GOTRAY_SERVICE_TOKEN` from `/etc/gotray/.env` by default; ensure the file is world-readable only if needed or copy minimal variables into a user-specific wrapper script. The tray does not require `GOTRAY_SECRET` when this token is supplied.
 
 ## 3. Windows (Service Control Manager + per-user agent)
 

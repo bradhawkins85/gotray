@@ -13,8 +13,8 @@ func init() {
 	}
 
 	trimmed := strings.TrimSpace(embeddedAPIKey)
-	if trimmed == "" {
-		panic("missing Tactical RMM API key: embed TRMM_APIKey at build time with -ldflags \"-X internal/trmm.embeddedAPIKey=<value>\"")
-	}
+        if trimmed == "" {
+                panic("missing Tactical RMM API key: embed TRMM_APIKEY at build time with -ldflags \"-X internal/trmm.embeddedAPIKey=<value>\"")
+        }
 	embeddedAPIKey = trimmed
 }

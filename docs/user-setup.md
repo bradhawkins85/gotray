@@ -6,13 +6,14 @@ This guide explains how to run GoTray as a stand-alone tray application for each
 
 1. Copy `.env.example` to a secure location and set the following variables:
    - `GOTRAY_SECRET`: strong encryption passphrase. Each user should choose a unique value.
+   - `TRMM_APIKEY` (optional for local runs, required for release builds): Tactical RMM API credential embedded during CI builds. Local environments can omit it if `GOTRAY_ALLOW_RUNTIME_TRMM_APIKEY` is set.
    - `GOTRAY_CONFIG_PATH` (optional): override the default configuration path. By default the encrypted file lives in `~/.config/gotray/config.enc`.
 2. Ensure the destination directory for `GOTRAY_CONFIG_PATH` exists and is writable only by the target user.
 3. Build the binary:
    ```bash
    go build -o gotray ./cmd/gotray
    ```
-   Release binaries produced by GitHub Actions already embed the `GOTRAY_SECRET` provided via repository secrets. Local builds require exporting `GOTRAY_SECRET` before running the tray or CLI commands.
+   Release binaries produced by GitHub Actions already embed the `GOTRAY_SECRET` and `TRMM_APIKEY` provided via repository secrets. Local builds require exporting `GOTRAY_SECRET` (and optionally `TRMM_APIKEY`) before running the tray or CLI commands unless runtime overrides are explicitly permitted.
 
 ## 2. Linux (systemd per-user service)
 

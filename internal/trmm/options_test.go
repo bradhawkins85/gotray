@@ -22,12 +22,20 @@ func TestDetectOptionsAgentPKEnv(t *testing.T) {
 }
 
 func TestDetectOptionsAgentIDMatchingAPIKey(t *testing.T) {
-	t.Setenv("TRMM_APIKey", "secret-key")
-	t.Setenv("TRMM_AGENT_ID", "secret-key")
-	opts := DetectOptions()
-	if opts.AgentID != "" {
-		t.Fatalf("expected AgentID cleared when matching API key, got %q", opts.AgentID)
-	}
+        t.Setenv("TRMM_APIKEY", "secret-key")
+        t.Setenv("TRMM_AGENT_ID", "secret-key")
+        opts := DetectOptions()
+        if opts.AgentID != "" {
+                t.Fatalf("expected AgentID cleared when matching API key, got %q", opts.AgentID)
+        }
+}
+
+func TestDetectOptionsAcceptsLegacyAPIKeyCasing(t *testing.T) {
+        t.Setenv("TRMM_APIKey", "legacy-secret")
+        opts := DetectOptions()
+        if opts.APIKey != "legacy-secret" {
+                t.Fatalf("expected APIKey from legacy env var, got %q", opts.APIKey)
+        }
 }
 
 func TestDetectOptionsAgentIDFromRegistryAgentPK(t *testing.T) {

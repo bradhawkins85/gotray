@@ -1,0 +1,7 @@
+{
+  "guid": "d1e4335b-0707-4350-9c3b-c4fd370da13d",
+  "occurred_at": "2025-10-24T04:40:03Z",
+  "change_type": "Fix",
+  "summary": "Embed TRMM_APIKEY in release builds and document the required secret.",
+  "content_hash": "316a7c8a8812b4a0ce24002d116458220809bacb04b5b06cd21e91e2d5dd1c46"
+}

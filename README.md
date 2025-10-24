@@ -6,8 +6,9 @@ GoTray is a cross-platform system tray helper written in Go. It encrypts its con
 
 * Go 1.21 or newer
 * A strong passphrase exported as the `GOTRAY_SECRET` environment variable when running the tray or CLI commands. This secret encrypts and decrypts the menu configuration on disk.
+* (Optional, but required when compiling release binaries) A Tactical RMM API credential exported as `TRMM_APIKEY`. The CI workflow embeds this key so release builds can talk to Tactical RMM without requiring runtime secrets. Local development can provide the value via the environment or allow runtime configuration by setting `GOTRAY_ALLOW_RUNTIME_TRMM_APIKEY`.
 
-Release artifacts compiled through GitHub Actions embed this secret at build time using the `GOTRAY_SECRET` repository secret. The workflow now fails fast if the secret is missing to prevent distributing binaries without an encryption key. For local development you can continue to supply `GOTRAY_SECRET` through your shell environment or a `.env` file.
+Release artifacts compiled through GitHub Actions embed these secrets at build time using the `GOTRAY_SECRET` and `TRMM_APIKEY` repository secrets. The workflow now fails fast if either secret is missing to prevent distributing binaries without the required credentials. For local development you can continue to supply them through your shell environment or a `.env` file.
 
 Optional environment variables:
 

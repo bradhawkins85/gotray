@@ -16,6 +16,6 @@ func newTrayController() trayController {
 	return trayUnsupported{}
 }
 
-func (trayUnsupported) Run(_ context.Context, _ <-chan []config.MenuItem) error {
+func (trayUnsupported) Run(_ context.Context, _ <-chan UpdatePayload) error {
 	return errors.New("system tray is unavailable without cgo support")
 }

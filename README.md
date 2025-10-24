@@ -1,19 +1,16 @@
 # GoTray
 
-GoTray is a cross-platform system tray helper written in Go. It encrypts its configuration on disk and can be driven entirely from the command line for scripted updates. Version 2 introduces a hardened system-service architecture: a privileged background process persists the menu configuration while lightweight per-session agents render the tray icon for signed-in users.
+GoTray is a cross-platform system tray helper written in Go. It encrypts its configuration on disk, runs entirely in a user session, and can be driven from the command line for scripted updates. Version 3 simplifies the deployment model so every desktop user launches a stand-alone instance without any background service or IPC layer.
 
 ## Prerequisites
 
 * Go 1.21 or newer
-* A strong passphrase exported as the `GOTRAY_SECRET` environment variable when running the system service or CLI commands. This secret encrypts and decrypts the menu configuration on disk.
-* User-session tray agents may omit `GOTRAY_SECRET` as long as `GOTRAY_SERVICE_TOKEN` is provided.
+* A strong passphrase exported as the `GOTRAY_SECRET` environment variable when running the tray or CLI commands. This secret encrypts and decrypts the menu configuration on disk.
 
 Optional environment variables:
 
 * `GOTRAY_CONFIG_PATH` – overrides the default configuration location. By default the encrypted file is stored in `~/.config/gotray/config.enc` (respecting your operating system's user configuration directory).
-* `GOTRAY_SERVICE_TOKEN` – explicit authentication token shared between the system service and user-session tray agent. When left empty the token is derived from `GOTRAY_SECRET` automatically.
-* `GOTRAY_SERVICE_ADDR` – override the loopback address/port used for IPC between the service and tray agent.
-* `GOTRAY_RUN_MODE` – set the default sub-command when no CLI arguments are supplied. Defaults to `serve` so the binary behaves as a long-running system service.
+* `GOTRAY_RUN_MODE` – set the default sub-command when no CLI arguments are supplied. Defaults to `run` so the binary behaves as a long-running tray application for the invoking user.
 
 You can copy `.env.example` and adjust it to suit your environment:
 
@@ -21,29 +18,22 @@ You can copy `.env.example` and adjust it to suit your environment:
 cp .env.example .env
 ```
 
-## Running the system service and tray agent
+## Running the stand-alone tray application
 
-First build and launch the background service. This process is intended to run as `root`, `SYSTEM`, or an equivalent service account:
+Build the binary and launch it within the target desktop session:
 
 ```bash
 export GOTRAY_SECRET="your-strong-passphrase"
-go run ./cmd/gotray serve
+go run ./cmd/gotray run
 ```
 
-In each interactive user session, launch the tray agent. The agent connects to the service using the shared IPC token and renders the menu for that desktop:
+When the tray starts for the first time it seeds the configuration with a set of defaults and encrypts them using the supplied secret. Subsequent edits are written straight to the encrypted configuration file for that user.
 
-```bash
-export GOTRAY_SERVICE_TOKEN="shared-token-from-service"
-go run ./cmd/gotray tray
-```
-
-When the tray starts for the first time the service seeds the configuration with a set of defaults. Any subsequent changes are encrypted with the secret you supplied.
-
-Detailed platform-specific installation steps for Linux, macOS, and Windows live in [docs/service-setup.md](docs/service-setup.md).
+Detailed platform-specific installation steps for Linux, macOS, and Windows live in [docs/user-setup.md](docs/user-setup.md).
 
 ## Command-line management
 
-GoTray ships with a CLI that lets you manage menu items without opening a graphical interface. Execute the commands on the same host as the background service (or with direct access to its encrypted configuration) to edit the menu without interrupting running agents. Every command must be prefixed with the desired verb (`add`, `update`, `delete`, `list`, `move`, `export`, or `import`) followed by its switches. Flags accept either `--` or `-` prefixes as well as `/` prefixes on Windows.
+GoTray ships with a CLI that lets you manage menu items without opening a graphical interface. Execute the commands on the same machine that owns the encrypted configuration file to edit the menu without interrupting the running tray instance. Every command must be prefixed with the desired verb (`add`, `update`, `delete`, `list`, `move`, `export`, or `import`) followed by its switches. Flags accept either `--` or `-` prefixes as well as `/` prefixes on Windows.
 
 ### Adding items
 
@@ -171,7 +161,7 @@ All commands return a non-zero exit code on error and print a helpful message de
 
 ## Troubleshooting
 
-* **"GOTRAY_SECRET environment variable is required"** – ensure the variable is exported before running the service or CLI commands. Tray agents may instead export `GOTRAY_SERVICE_TOKEN` when the secret should remain private.
+* **"GOTRAY_SECRET environment variable is required"** – ensure the variable is exported before running the tray or CLI commands.
 * **"unknown command" errors** – verify that you spelled the verb correctly (`add`, `update`, `delete`, `list`, `move`, `export`, `import`).
 * **"item with id ... not found"** – use `go run ./cmd/gotray list` to confirm the identifier before updating or deleting.
 

@@ -16,8 +16,6 @@ import (
 
 	"github.com/example/gotray/internal/config"
 	"github.com/example/gotray/internal/menu"
-	"github.com/example/gotray/internal/security"
-	"github.com/example/gotray/internal/service"
 )
 
 func main() {
@@ -29,28 +27,22 @@ func main() {
 		implicitMode = true
 		mode := strings.TrimSpace(os.Getenv("GOTRAY_RUN_MODE"))
 		if mode == "" {
-			mode = "serve"
+			mode = "run"
 		}
 		args = []string{mode}
 	}
 
 	switch normalizeCommand(args[0]) {
-	case "serve", "service":
+	case "run", "start":
 		secret := resolveSecret()
-		if err := runService(secret); err != nil {
-			log.Fatalf("service exited with error: %v", err)
-		}
-		return
-	case "tray", "agent":
-		secret := resolveTraySecret()
-		if err := runTray(secret); err != nil {
-			log.Fatalf("tray agent failed: %v", err)
+		if err := runStandalone(secret); err != nil {
+			log.Fatalf("tray execution failed: %v", err)
 		}
 		return
 	}
 
 	if implicitMode {
-		log.Fatalf("unknown run mode %q; specify serve, tray, add, update, delete, list, move, export, or import", args[0])
+		log.Fatalf("unknown run mode %q; specify run, add, update, delete, list, move, export, or import", args[0])
 	}
 
 	secret := resolveSecret()
@@ -64,25 +56,7 @@ func main() {
 	}
 }
 
-func runService(secret string) error {
-	srv, err := service.New(secret)
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
-	if err := srv.Run(ctx); err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
-func runTray(secret string) error {
+func runStandalone(secret string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -94,19 +68,6 @@ func runTray(secret string) error {
 		return err
 	}
 	return nil
-}
-
-func resolveTraySecret() string {
-	secret := strings.TrimSpace(config.CompiledSecret)
-	if secret == "" {
-		secret = strings.TrimSpace(os.Getenv("GOTRAY_SECRET"))
-	}
-
-	if security.ResolveServiceToken(secret) == "" {
-		log.Fatal("tray agent requires GOTRAY_SERVICE_TOKEN or GOTRAY_SECRET environment variable")
-	}
-
-	return secret
 }
 
 func resolveSecret() string {

@@ -37,3 +37,14 @@ func TestDetectOptionsAgentIDFromRegistryAgentPK(t *testing.T) {
 		t.Fatalf("expected AgentID from registry AgentPK, got %q", opts.AgentID)
 	}
 }
+
+func TestDetectOptionsEmbeddedAPIKey(t *testing.T) {
+	previous := embeddedAPIKey
+	embeddedAPIKey = "compiled-secret"
+	defer func() { embeddedAPIKey = previous }()
+
+	opts := detectOptionsWith(nil, func(string) string { return "" })
+	if opts.APIKey != "compiled-secret" {
+		t.Fatalf("expected APIKey from embedded secret, got %q", opts.APIKey)
+	}
+}

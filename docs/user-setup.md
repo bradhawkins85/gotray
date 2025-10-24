@@ -12,6 +12,7 @@ This guide explains how to run GoTray as a stand-alone tray application for each
    ```bash
    go build -o gotray ./cmd/gotray
    ```
+   Release binaries produced by GitHub Actions already embed the `GOTRAY_SECRET` provided via repository secrets. Local builds require exporting `GOTRAY_SECRET` before running the tray or CLI commands.
 
 ## 2. Linux (systemd per-user service)
 

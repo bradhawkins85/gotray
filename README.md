@@ -7,6 +7,8 @@ GoTray is a cross-platform system tray helper written in Go. It encrypts its con
 * Go 1.21 or newer
 * A strong passphrase exported as the `GOTRAY_SECRET` environment variable when running the tray or CLI commands. This secret encrypts and decrypts the menu configuration on disk.
 
+Release artifacts compiled through GitHub Actions embed this secret at build time using the `GOTRAY_SECRET` repository secret. The workflow now fails fast if the secret is missing to prevent distributing binaries without an encryption key. For local development you can continue to supply `GOTRAY_SECRET` through your shell environment or a `.env` file.
+
 Optional environment variables:
 
 * `GOTRAY_CONFIG_PATH` – overrides the default configuration location. By default the encrypted file is stored in `~/.config/gotray/config.enc` (respecting your operating system's user configuration directory).

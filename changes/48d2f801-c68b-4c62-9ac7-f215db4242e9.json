@@ -1,0 +1,7 @@
+{
+  "guid": "48d2f801-c68b-4c62-9ac7-f215db4242e9",
+  "occurred_at": "2025-10-24T04:23:04Z",
+  "change_type": "Fix",
+  "summary": "Enforced compile-time embedding of GOTRAY_SECRET via GitHub Actions and documented workflow requirements.",
+  "content_hash": "c2929e3e5a1cdc40d14722f8bc7adb12753915bab9a2cfb1a5d93d2e8972b9a6"
+}

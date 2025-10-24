@@ -52,13 +52,14 @@ jobs:
           CGO_ENABLED: 0
           GOTRAY_SECRET: ${{ secrets.GOTRAY_SECRET }}
         run: |
+          set -euo pipefail
           mkdir -p dist
           output="dist/gotray-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          if [ -n "${GOTRAY_SECRET}" ]; then
-            go build -trimpath -ldflags "-X github.com/example/gotray/internal/config.CompiledSecret=${GOTRAY_SECRET}" -o "$output" ./cmd/gotray
-          else
-            go build -trimpath -o "$output" ./cmd/gotray
+          if [ -z "${GOTRAY_SECRET}" ]; then
+            echo "GOTRAY_SECRET GitHub secret is required to build release artifacts" >&2
+            exit 1
           fi
+          go build -trimpath -ldflags "-X github.com/example/gotray/internal/config.CompiledSecret=${GOTRAY_SECRET}" -o "$output" ./cmd/gotray
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

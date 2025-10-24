@@ -1,0 +1,7 @@
+{
+  "guid": "9f84176f-99c2-43f1-baf8-3acf183d03d9",
+  "occurred_at": "2025-10-24T04:24:39Z",
+  "change_type": "Fix",
+  "summary": "Fix parseGlobalFlags to return all values on error",
+  "content_hash": "7e9cd3846900d81e9ec108019feface1b4ea1ab025db5ad4af1bd24167f2440e"
+}

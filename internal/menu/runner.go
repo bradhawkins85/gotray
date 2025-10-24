@@ -33,6 +33,7 @@ type UpdatePayload struct {
 type Runner struct {
 	secret          string
 	refreshInterval time.Duration
+	offline         bool
 
 	mu             sync.RWMutex
 	lastItems      []config.MenuItem
@@ -44,11 +45,13 @@ type Runner struct {
 }
 
 // NewRunner constructs a Runner that loads menu definitions directly from disk
-// using the provided secret.
-func NewRunner(secret string) *Runner {
+// using the provided secret. When offline is true Tactical RMM synchronisation
+// is disabled and local configuration is used exclusively.
+func NewRunner(secret string, offline bool) *Runner {
 	r := &Runner{
 		secret:          strings.TrimSpace(secret),
 		refreshInterval: defaultRefreshInterval,
+		offline:         offline,
 	}
 	r.tray = newTrayController()
 	r.updates = make(chan UpdatePayload, 1)
@@ -62,7 +65,11 @@ func (r *Runner) Start(ctx context.Context) error {
 		return errors.New("missing secret; set GOTRAY_SECRET before starting the tray")
 	}
 
-	log.Printf("GoTray running in standalone mode")
+	if r.offline {
+		log.Printf("GoTray running in offline mode; Tactical RMM sync disabled")
+	} else {
+		log.Printf("GoTray running in standalone mode")
+	}
 	logging.Debugf("tray runner initialising with refresh interval %s", r.refreshInterval)
 
 	var trayErr <-chan error
@@ -125,17 +132,22 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 	}
 	logging.Debugf("loaded %d menu items from configuration", len(cfg.Items))
 
-	options := trmm.DetectOptions()
-	logging.Debugf("detected Tactical RMM options: base=%s agentId=%s site=%d client=%d pk=%d", options.BaseURL, logging.MaskIdentifier(options.AgentID), options.SiteID, options.ClientID, options.AgentPK)
-	trayData, err := trmm.FetchTrayData(ctx, nil, options)
-	if err != nil {
-		log.Printf("Tactical RMM integration failed: %v", err)
-	}
-
-	if trayData != nil {
-		logging.Debugf("received Tactical RMM tray override with %d items and icon=%t", len(trayData.MenuItems), len(trayData.Icon) > 0)
+	var trayData *trmm.TrayData
+	if r.offline {
+		logging.Debugf("offline mode enabled; skipping Tactical RMM lookup")
 	} else {
-		logging.Debugf("no Tactical RMM tray override available")
+		options := trmm.DetectOptions()
+		logging.Debugf("detected Tactical RMM options: base=%s agentId=%s site=%d client=%d pk=%d", options.BaseURL, logging.MaskIdentifier(options.AgentID), options.SiteID, options.ClientID, options.AgentPK)
+		trayData, err = trmm.FetchTrayData(ctx, nil, options)
+		if err != nil {
+			log.Printf("Tactical RMM integration failed: %v", err)
+		}
+
+		if trayData != nil {
+			logging.Debugf("received Tactical RMM tray override with %d items and icon=%t", len(trayData.MenuItems), len(trayData.Icon) > 0)
+		} else {
+			logging.Debugf("no Tactical RMM tray override available")
+		}
 	}
 
 	items := make([]config.MenuItem, len(cfg.Items))

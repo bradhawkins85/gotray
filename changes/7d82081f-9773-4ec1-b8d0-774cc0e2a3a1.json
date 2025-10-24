@@ -1,0 +1,7 @@
+{
+  "guid": "7d82081f-9773-4ec1-b8d0-774cc0e2a3a1",
+  "occurred_at": "2025-10-24T04:17:24Z",
+  "change_type": "Feature",
+  "summary": "Add offline and Tactical RMM import flags for tray runner",
+  "content_hash": "d3f2609a28fd0de08b91e015913c9406fd3a11575fcd5f312514f15a6b8b2691"
+}

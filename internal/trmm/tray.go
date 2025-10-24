@@ -491,24 +491,31 @@ func getJSON(ctx context.Context, client *http.Client, endpoint, apiKey string, 
 		return err
 	}
 	req.Header.Set("X-API-KEY", apiKey)
+	logging.LogHTTPRequest(req, nil)
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return errNotFound
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(snippet)))
-	}
-
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		return err
 	}
+	logging.LogHTTPResponse(resp, body)
+
+	if resp.StatusCode == http.StatusNotFound {
+		return errNotFound
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		snippet := strings.TrimSpace(string(body))
+		if snippet == "" {
+			snippet = resp.Status
+		}
+		return fmt.Errorf("request failed (%d): %s", resp.StatusCode, snippet)
+	}
+
 	if len(body) == 0 {
 		return nil
 	}
@@ -528,7 +535,6 @@ func getJSON(ctx context.Context, client *http.Client, endpoint, apiKey string, 
 	}
 	return json.Unmarshal(wrapper.Results, dest)
 }
-
 func findDefinition(defs []customFieldDefinition, model, name string) *customFieldDefinition {
 	for idx := range defs {
 		if !strings.EqualFold(defs[idx].Model, model) {

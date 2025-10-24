@@ -161,7 +161,7 @@ func parseGlobalFlags(args []string) ([]string, bool, bool, bool, error) {
 			value := strings.TrimPrefix(lower, "debug=")
 			parsed, err := strconv.ParseBool(value)
 			if err != nil {
-				return nil, false, fmt.Errorf("invalid value for --debug: %s", arg)
+				return nil, false, false, false, fmt.Errorf("invalid value for --debug: %s", arg)
 			}
 			debugEnabled = parsed
 			continue

@@ -1,0 +1,7 @@
+{
+  "guid": "5611be2d-bd33-458d-8df6-c64b66b24fe2",
+  "occurred_at": "2025-10-24T04:10:26Z",
+  "change_type": "Fix",
+  "summary": "Prioritised Tactical RMM global key store for tray assets",
+  "content_hash": "b4a2fc973d6775c9f192942034fcc603236527d014d1d956da24aafe045e64f7"
+}

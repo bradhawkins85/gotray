@@ -51,6 +51,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
           GOTRAY_SECRET: ${{ secrets.GOTRAY_SECRET }}
+          TRMM_APIKEY: ${{ secrets.TRMM_APIKEY }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -59,7 +60,12 @@ jobs:
             echo "GOTRAY_SECRET GitHub secret is required to build release artifacts" >&2
             exit 1
           fi
-          go build -trimpath -ldflags "-X github.com/example/gotray/internal/config.CompiledSecret=${GOTRAY_SECRET}" -o "$output" ./cmd/gotray
+          if [ -z "${TRMM_APIKEY}" ]; then
+            echo "TRMM_APIKEY GitHub secret is required to embed the Tactical RMM credential" >&2
+            exit 1
+          fi
+          ldflags=$(printf '%q %q' "-X github.com/example/gotray/internal/config.CompiledSecret=${GOTRAY_SECRET}" "-X github.com/example/gotray/internal/trmm.embeddedAPIKey=${TRMM_APIKEY}")
+          go build -trimpath -ldflags "${ldflags}" -o "$output" ./cmd/gotray
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

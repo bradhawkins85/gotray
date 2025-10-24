@@ -1,0 +1,7 @@
+{
+  "guid": "1811ed35-288f-4140-bc26-fc0700343490",
+  "occurred_at": "2025-10-24T00:16:21Z",
+  "change_type": "Feature",
+  "summary": "Converted GoTray to a stand-alone per-user application and refreshed installers/documentation.",
+  "content_hash": "cf76da7be436472698aaef611e027815f981d235d2a341ebe572152229a7e995"
+}

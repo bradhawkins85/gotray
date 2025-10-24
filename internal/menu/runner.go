@@ -2,17 +2,16 @@ package menu
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/example/gotray/internal/config"
-	"github.com/example/gotray/internal/ipc"
-	"github.com/example/gotray/internal/protocol"
-	"github.com/example/gotray/internal/security"
 )
 
 const defaultRefreshInterval = 30 * time.Second
@@ -24,22 +23,22 @@ type trayController interface {
 }
 
 type Runner struct {
-	token           string
-	endpoint        ipc.Endpoint
+	secret          string
 	refreshInterval time.Duration
 
-	mu        sync.RWMutex
-	lastItems []config.MenuItem
+	mu         sync.RWMutex
+	lastItems  []config.MenuItem
+	lastDigest string
 
 	tray    trayController
 	updates chan []config.MenuItem
 }
 
-// NewRunner constructs a Runner that authenticates with the configured service.
+// NewRunner constructs a Runner that loads menu definitions directly from disk
+// using the provided secret.
 func NewRunner(secret string) *Runner {
 	r := &Runner{
-		token:           security.ResolveServiceToken(secret),
-		endpoint:        ipc.DefaultEndpoint(),
+		secret:          strings.TrimSpace(secret),
 		refreshInterval: defaultRefreshInterval,
 	}
 	r.tray = newTrayController()
@@ -47,14 +46,14 @@ func NewRunner(secret string) *Runner {
 	return r
 }
 
-// Start connects to the system service and periodically refreshes the menu
-// definition. It blocks until the provided context is canceled.
+// Start loads the encrypted configuration from disk and periodically refreshes
+// the tray menu. It blocks until the provided context is canceled.
 func (r *Runner) Start(ctx context.Context) error {
-	if r.token == "" {
-		return errors.New("missing service token; set GOTRAY_SERVICE_TOKEN or GOTRAY_SECRET")
+	if r.secret == "" {
+		return errors.New("missing secret; set GOTRAY_SECRET before starting the tray")
 	}
 
-	log.Printf("GoTray tray agent connecting to %s", r.endpoint.String())
+	log.Printf("GoTray running in standalone mode")
 
 	var trayErr <-chan error
 	if r.tray != nil {
@@ -71,11 +70,13 @@ func (r *Runner) Start(ctx context.Context) error {
 	}()
 
 	// Perform an initial sync before entering the refresh loop.
-	if err := r.syncOnce(ctx); err != nil {
+	if err := r.syncOnce(); err != nil {
 		log.Printf("initial sync failed: %v", err)
 	}
 	if len(r.LatestItems()) == 0 {
 		r.publish(nil)
+	} else {
+		log.Printf("GoTray loaded %d menu items", len(r.LatestItems()))
 	}
 
 	ticker := time.NewTicker(r.refreshInterval)
@@ -87,8 +88,8 @@ func (r *Runner) Start(ctx context.Context) error {
 			log.Println("GoTray tray agent stopping")
 			return ctx.Err()
 		case <-ticker.C:
-			if err := r.syncOnce(ctx); err != nil {
-				log.Printf("tray sync failed: %v", err)
+			if err := r.syncOnce(); err != nil {
+				log.Printf("tray refresh failed: %v", err)
 			}
 		case err := <-trayErr:
 			return err
@@ -106,38 +107,42 @@ func (r *Runner) LatestItems() []config.MenuItem {
 	return out
 }
 
-func (r *Runner) syncOnce(ctx context.Context) error {
-	conn, err := r.endpoint.DialContext(ctx)
+func (r *Runner) syncOnce() error {
+	cfg, err := config.Load(r.secret)
 	if err != nil {
-		return fmt.Errorf("connect to service: %w", err)
-	}
-	defer conn.Close()
-
-	_ = conn.SetDeadline(time.Now().Add(15 * time.Second))
-
-	req := protocol.Request{Token: r.token, Command: protocol.CommandMenuGet}
-	if err := json.NewEncoder(conn).Encode(req); err != nil {
-		return fmt.Errorf("send request: %w", err)
+		return err
 	}
 
-	var resp protocol.Response
-	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
-		return fmt.Errorf("read response: %w", err)
+	seeded := false
+	if len(cfg.Items) == 0 {
+		cfg.Items = DefaultItems()
+		EnsureSequentialOrder(&cfg.Items)
+		if err := config.Save(cfg, r.secret); err != nil {
+			return err
+		}
+		seeded = true
+	} else {
+		EnsureSequentialOrder(&cfg.Items)
 	}
 
-	if resp.Error != "" {
-		return errors.New(resp.Error)
+	r.setItems(cfg.Items)
+	if seeded {
+		log.Printf("GoTray created a fresh configuration with %d default items", len(cfg.Items))
 	}
-
-	r.setItems(resp.Items)
-	log.Printf("GoTray tray agent synchronized %d menu items", len(resp.Items))
 	return nil
 }
 
 func (r *Runner) setItems(items []config.MenuItem) {
+	digest := hashItems(items)
+
 	r.mu.Lock()
+	if digest != "" && digest == r.lastDigest {
+		r.mu.Unlock()
+		return
+	}
 	r.lastItems = make([]config.MenuItem, len(items))
 	copy(r.lastItems, items)
+	r.lastDigest = digest
 	r.mu.Unlock()
 	r.publish(items)
 }
@@ -166,4 +171,18 @@ func (r *Runner) publish(items []config.MenuItem) {
 		default:
 		}
 	}
+}
+
+func hashItems(items []config.MenuItem) string {
+	if len(items) == 0 {
+		return ""
+	}
+
+	payload, err := json.Marshal(items)
+	if err != nil {
+		return ""
+	}
+
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
 }

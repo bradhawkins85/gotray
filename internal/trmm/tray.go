@@ -173,6 +173,11 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 	}
 	logging.Debugf("retrieved %d Tactical RMM custom field definitions", len(defs))
 
+	globalKeys, err := fetchGlobalKeyStore(ctx, httpClient, baseURL, apiKey)
+	if err != nil {
+		return nil, err
+	}
+
 	agent, err := fetchAgent(ctx, httpClient, baseURL, apiKey, agentID)
 	if err != nil {
 		return nil, err
@@ -226,6 +231,7 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 	}
 
 	iconValue := firstNonEmpty(
+		lookupInsensitive(globalKeys, "TrayIcon"),
 		extractFieldValue(agent.CustomFields, findDefinition(defs, "agent", "TrayIcon")),
 		extractFieldValue(siteFields(site), findDefinition(defs, "site", "TrayIcon")),
 		extractFieldValue(clientFields(client), findDefinition(defs, "client", "TrayIcon")),
@@ -246,25 +252,44 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		}
 	}
 
-	menuValue := firstNonEmpty(
-		extractFieldValue(agent.CustomFields, findDefinition(defs, "agent", "TrayMenu")),
-		extractFieldValue(siteFields(site), findDefinition(defs, "site", "TrayMenu")),
-		extractFieldValue(clientFields(client), findDefinition(defs, "client", "TrayMenu")),
-		defaultValue(findDefinition(defs, "agent", "TrayMenu")),
-		defaultValue(findDefinition(defs, "site", "TrayMenu")),
-		defaultValue(findDefinition(defs, "client", "TrayMenu")),
-	)
-
 	var menuItems []config.MenuItem
-	if strings.TrimSpace(menuValue) != "" {
-		parsed, err := parseMenu(menuValue)
-		if err != nil {
-			warnings.add(fmt.Errorf("parse tray menu: %w", err))
-			logging.Debugf("failed to parse Tactical RMM tray menu JSON: %v", err)
-		} else {
-			menuItems = parsed
-			logging.Debugf("parsed %d Tactical RMM menu items", len(menuItems))
+	appendMenu := func(payload, source string) bool {
+		trimmed := strings.TrimSpace(payload)
+		if trimmed == "" {
+			return false
 		}
+		parsed, err := parseMenu(trimmed)
+		if err != nil {
+			warnings.add(fmt.Errorf("parse %s tray menu: %w", source, err))
+			logging.Debugf("failed to parse Tactical RMM %s tray menu JSON: %v", source, err)
+			return false
+		}
+		if len(parsed) == 0 {
+			return false
+		}
+		menuItems = append(menuItems, parsed...)
+		logging.Debugf("parsed %d Tactical RMM %s menu items", len(parsed), source)
+		return true
+	}
+
+	appendedAny := false
+	if appended := appendMenu(lookupInsensitive(globalKeys, "TrayMenu"), "global key store"); appended {
+		appendedAny = true
+	}
+	if appended := appendMenu(extractFieldValue(clientFields(client), findDefinition(defs, "client", "TrayMenu")), "client custom field"); appended {
+		appendedAny = true
+	}
+	if appended := appendMenu(extractFieldValue(siteFields(site), findDefinition(defs, "site", "TrayMenu")), "site custom field"); appended {
+		appendedAny = true
+	}
+	if appended := appendMenu(extractFieldValue(agent.CustomFields, findDefinition(defs, "agent", "TrayMenu")), "agent custom field"); appended {
+		appendedAny = true
+	}
+
+	if !appendedAny {
+		appendMenu(defaultValue(findDefinition(defs, "client", "TrayMenu")), "client default")
+		appendMenu(defaultValue(findDefinition(defs, "site", "TrayMenu")), "site default")
+		appendMenu(defaultValue(findDefinition(defs, "agent", "TrayMenu")), "agent default")
 	}
 
 	if len(menuItems) == 0 && len(iconData) == 0 {
@@ -572,6 +597,17 @@ func defaultValue(def *customFieldDefinition) string {
 	return strings.TrimSpace(def.Default())
 }
 
+func lookupInsensitive(values map[string]string, key string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	trimmedKey := strings.ToLower(strings.TrimSpace(key))
+	if trimmedKey == "" {
+		return ""
+	}
+	return strings.TrimSpace(values[trimmedKey])
+}
+
 type multiError struct {
 	parts []string
 }
@@ -592,4 +628,58 @@ func (m *multiError) err() error {
 		return nil
 	}
 	return errors.New(strings.Join(m.parts, "; "))
+}
+
+func fetchGlobalKeyStore(ctx context.Context, client *http.Client, baseURL, apiKey string) (map[string]string, error) {
+	endpoint, err := joinURL(baseURL, "/core/keystore/")
+	if err != nil {
+		return nil, err
+	}
+
+	var payload []map[string]interface{}
+	if err := getJSON(ctx, client, endpoint, apiKey, &payload); err != nil {
+		if errors.Is(err, errNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	values := make(map[string]string, len(payload))
+	for _, entry := range payload {
+		key := firstNonEmpty(
+			stringFromAny(entry["key"]),
+			stringFromAny(entry["name"]),
+			stringFromAny(entry["slug"]),
+		)
+		if key == "" {
+			continue
+		}
+
+		value := firstNonEmpty(
+			stringFromAny(entry["value"]),
+			stringFromAny(entry["data"]),
+			stringFromAny(entry["string_value"]),
+		)
+		if value == "" {
+			continue
+		}
+
+		values[strings.ToLower(key)] = value
+	}
+	return values, nil
+}
+
+func stringFromAny(input interface{}) string {
+	switch v := input.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case fmt.Stringer:
+		return strings.TrimSpace(v.String())
+	case []byte:
+		return strings.TrimSpace(string(v))
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
 }

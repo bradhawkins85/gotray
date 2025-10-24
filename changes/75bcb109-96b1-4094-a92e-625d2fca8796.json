@@ -1,0 +1,7 @@
+{
+  "guid": "75bcb109-96b1-4094-a92e-625d2fca8796",
+  "occurred_at": "2025-10-24T03:18:48Z",
+  "change_type": "Fix",
+  "summary": "Improve Tactical RMM tray menu parsing to accept encoded payloads",
+  "content_hash": "4546740916c56466023aa287405f5b5a417fe02f043f5387db546660fba26710"
+}

@@ -322,16 +322,70 @@ func parseMenu(value string) ([]config.MenuItem, error) {
 		return nil, nil
 	}
 
-	var items []config.MenuItem
-	if err := json.Unmarshal([]byte(payload), &items); err == nil {
-		return items, nil
+	type candidate struct {
+		data string
 	}
 
-	var wrapper struct {
-		Items []config.MenuItem `json:"items"`
+	queue := []candidate{{data: payload}}
+	seen := make(map[string]struct{})
+
+	tryUnmarshal := func(input string) ([]config.MenuItem, bool) {
+		data := []byte(input)
+
+		var items []config.MenuItem
+		if err := json.Unmarshal(data, &items); err == nil {
+			return items, true
+		}
+
+		var wrapper struct {
+			Items     *[]config.MenuItem `json:"items"`
+			Menu      *[]config.MenuItem `json:"menu"`
+			MenuItems *[]config.MenuItem `json:"menuItems"`
+		}
+		if err := json.Unmarshal(data, &wrapper); err == nil {
+			switch {
+			case wrapper.Items != nil:
+				return *wrapper.Items, true
+			case wrapper.Menu != nil:
+				return *wrapper.Menu, true
+			case wrapper.MenuItems != nil:
+				return *wrapper.MenuItems, true
+			}
+		}
+
+		return nil, false
 	}
-	if err := json.Unmarshal([]byte(payload), &wrapper); err == nil && len(wrapper.Items) > 0 {
-		return wrapper.Items, nil
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		trimmed := strings.TrimSpace(current.data)
+		if trimmed == "" {
+			continue
+		}
+
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+
+		if items, ok := tryUnmarshal(trimmed); ok {
+			return items, nil
+		}
+
+		if unquoted, err := strconv.Unquote(trimmed); err == nil {
+			queue = append(queue, candidate{data: unquoted})
+		}
+
+		var asJSONString string
+		if err := json.Unmarshal([]byte(trimmed), &asJSONString); err == nil {
+			queue = append(queue, candidate{data: asJSONString})
+		}
+
+		if decoded, err := decodeBase64(trimmed); err == nil && len(decoded) > 0 {
+			queue = append(queue, candidate{data: string(decoded)})
+		}
 	}
 
 	return nil, fmt.Errorf("unsupported tray menu payload")

@@ -20,3 +20,12 @@ func TestDetectOptionsAgentPKEnv(t *testing.T) {
 		t.Fatalf("expected AgentPK 99, got %d", opts.AgentPK)
 	}
 }
+
+func TestDetectOptionsAgentIDMatchingAPIKey(t *testing.T) {
+	t.Setenv("TRMM_APIKey", "secret-key")
+	t.Setenv("TRMM_AGENT_ID", "secret-key")
+	opts := DetectOptions()
+	if opts.AgentID != "" {
+		t.Fatalf("expected AgentID cleared when matching API key, got %q", opts.AgentID)
+	}
+}

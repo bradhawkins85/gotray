@@ -1,0 +1,7 @@
+{
+  "guid": "55586be0-449a-4a6a-9209-885246bd6095",
+  "occurred_at": "2025-10-24T02:14:21Z",
+  "change_type": "Fix",
+  "summary": "Prevent Tactical RMM API keys from being misused as agent identifiers during tray sync.",
+  "content_hash": "bdf3dfea902c29a112e8bbc9a3d012722b6e7f3a56438e96c2167126354b8d3f"
+}

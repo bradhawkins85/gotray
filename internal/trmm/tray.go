@@ -142,6 +142,11 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		return nil, nil
 	}
 
+	if agentID != "" && strings.EqualFold(agentID, apiKey) {
+		logging.Debugf("ignoring Tactical RMM agent identifier that matches API key")
+		agentID = ""
+	}
+
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}

@@ -33,6 +33,8 @@ func DetectOptions() Options {
 		if pk := parseInt(opts.AgentID); pk > 0 {
 			opts.AgentPK = pk
 			opts.AgentID = ""
+		} else if opts.APIKey != "" && strings.EqualFold(strings.TrimSpace(opts.AgentID), strings.TrimSpace(opts.APIKey)) {
+			opts.AgentID = ""
 		}
 	}
 	return opts

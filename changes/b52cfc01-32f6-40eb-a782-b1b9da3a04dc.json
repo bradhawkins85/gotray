@@ -1,0 +1,7 @@
+{
+  "guid": "b52cfc01-32f6-40eb-a782-b1b9da3a04dc",
+  "occurred_at": "2025-10-24T02:33:40Z",
+  "change_type": "Fix",
+  "summary": "Load Tactical RMM agent identifiers from the AgentPK registry value.",
+  "content_hash": "ec6ab85063de2b7b50d7848d0c8f06222893e988bc37b751c81afd7a5a705e17"
+}

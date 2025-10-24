@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+// embeddedAPIKey is populated at build time via -ldflags "-X" when
+// the TRMM API key is supplied through CI secrets.
+var embeddedAPIKey string
+
 // Options captures configuration for connecting to Tactical RMM.
 // Values may be provided via the Windows registry or environment variables.
 type Options struct {
@@ -20,14 +24,19 @@ type Options struct {
 // DetectOptions resolves Tactical RMM options from the environment and registry.
 func DetectOptions() Options {
 	reg := readRegistrySettings()
+	return detectOptionsWith(reg, os.Getenv)
+}
 
+type envLookup func(string) string
+
+func detectOptionsWith(reg map[string]string, getenv envLookup) Options {
 	opts := Options{}
-	opts.BaseURL = firstNonEmpty(reg["BaseURL"], os.Getenv("TRMM_BASE_URL"))
-	opts.APIKey = firstNonEmpty(reg["APIKey"], os.Getenv("TRMM_APIKey"), os.Getenv("TRMM_APIKEY"), os.Getenv("TRMM_API_KEY"))
-	opts.AgentID = firstNonEmpty(reg["AgentID"], os.Getenv("TRMM_AGENT_ID"))
-	opts.AgentPK = parseInt(firstNonEmpty(reg["AgentPK"], reg["AgentPk"], os.Getenv("TRMM_AGENT_PK")))
-	opts.SiteID = parseInt(firstNonEmpty(reg["SiteID"], os.Getenv("TRMM_SITE_ID")))
-	opts.ClientID = parseInt(firstNonEmpty(reg["ClientID"], os.Getenv("TRMM_CLIENT_ID")))
+	opts.BaseURL = firstNonEmpty(reg["BaseURL"], getenv("TRMM_BASE_URL"))
+	opts.APIKey = firstNonEmpty(reg["APIKey"], getenv("TRMM_APIKey"), getenv("TRMM_APIKEY"), getenv("TRMM_API_KEY"), embeddedAPIKey)
+	opts.AgentID = firstNonEmpty(reg["AgentPK"], reg["AgentPk"], reg["AgentID"], getenv("TRMM_AGENT_ID"))
+	opts.AgentPK = parseInt(firstNonEmpty(reg["AgentPK"], reg["AgentPk"], getenv("TRMM_AGENT_PK")))
+	opts.SiteID = parseInt(firstNonEmpty(reg["SiteID"], getenv("TRMM_SITE_ID")))
+	opts.ClientID = parseInt(firstNonEmpty(reg["ClientID"], getenv("TRMM_CLIENT_ID")))
 
 	if opts.AgentID != "" {
 		if pk := parseInt(opts.AgentID); pk > 0 {

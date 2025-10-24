@@ -48,3 +48,16 @@ func TestDetectOptionsEmbeddedAPIKey(t *testing.T) {
 		t.Fatalf("expected APIKey from embedded secret, got %q", opts.APIKey)
 	}
 }
+
+func TestDetectOptionsPrefersEmbeddedAPIKey(t *testing.T) {
+	previous := embeddedAPIKey
+	embeddedAPIKey = "compiled-secret"
+	defer func() { embeddedAPIKey = previous }()
+
+	registry := map[string]string{"APIKey": "registry-secret"}
+	env := func(string) string { return "env-secret" }
+	opts := detectOptionsWith(registry, env)
+	if opts.APIKey != "compiled-secret" {
+		t.Fatalf("expected embedded API key to win, got %q", opts.APIKey)
+	}
+}

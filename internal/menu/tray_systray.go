@@ -33,7 +33,7 @@ func newTrayController() trayController {
 	return &systrayController{}
 }
 
-func (c *systrayController) Run(ctx context.Context, updates <-chan []config.MenuItem) error {
+func (c *systrayController) Run(ctx context.Context, updates <-chan UpdatePayload) error {
 	done := make(chan struct{})
 
 	go systray.Run(func() {

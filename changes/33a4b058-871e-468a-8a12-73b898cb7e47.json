@@ -1,0 +1,7 @@
+{
+  "guid": "33a4b058-871e-468a-8a12-73b898cb7e47",
+  "occurred_at": "2025-10-24T03:28:46Z",
+  "change_type": "Feature",
+  "summary": "Add comprehensive debug logging for Tactical RMM HTTP traffic while masking API keys.",
+  "content_hash": "b250e61ecfb92b439eb6977bd250235a5526b40403674803b3d4d8ee755a6f8b"
+}

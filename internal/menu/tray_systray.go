@@ -4,6 +4,7 @@
 package menu
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 type systrayController struct {
 	mu      sync.Mutex
 	entries []trayEntry
+	icon    []byte
 }
 
 type trayEntry struct {
@@ -35,11 +37,10 @@ func (c *systrayController) Run(ctx context.Context, updates <-chan []config.Men
 	done := make(chan struct{})
 
 	go systray.Run(func() {
-		if iconData != nil {
-			systray.SetIcon(iconData)
-			if runtime.GOOS == "darwin" {
-				systray.SetTemplateIcon(iconData, iconData)
-			}
+		icon := cloneDefaultIcon()
+		systray.SetIcon(icon)
+		if runtime.GOOS == "darwin" {
+			systray.SetTemplateIcon(icon, icon)
 		}
 		systray.SetTooltip("GoTray")
 		go c.listen(ctx, updates)
@@ -58,19 +59,37 @@ func (c *systrayController) Run(ctx context.Context, updates <-chan []config.Men
 	}
 }
 
-func (c *systrayController) listen(ctx context.Context, updates <-chan []config.MenuItem) {
+func (c *systrayController) listen(ctx context.Context, updates <-chan UpdatePayload) {
 	for {
 		select {
 		case <-ctx.Done():
 			systray.Quit()
 			return
-		case items, ok := <-updates:
+		case payload, ok := <-updates:
 			if !ok {
 				systray.Quit()
 				return
 			}
-			c.render(ctx, items)
+			c.applyIcon(payload.Icon)
+			c.render(ctx, payload.Items)
 		}
+	}
+}
+
+func (c *systrayController) applyIcon(data []byte) {
+	resolved := normalizedIcon(data)
+
+	c.mu.Lock()
+	if bytes.Equal(c.icon, resolved) {
+		c.mu.Unlock()
+		return
+	}
+	c.icon = resolved
+	c.mu.Unlock()
+
+	systray.SetIcon(resolved)
+	if runtime.GOOS == "darwin" {
+		systray.SetTemplateIcon(resolved, resolved)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/example/gotray/internal/config"
 	"github.com/example/gotray/internal/logging"
 	"github.com/example/gotray/internal/menu"
+	"github.com/example/gotray/internal/trmm"
 )
 
 func main() {
@@ -25,12 +26,20 @@ func main() {
 
 	args := os.Args[1:]
 	var err error
-	args, debug, err := parseGlobalFlags(args)
+	args, debug, offline, importTRMM, err := parseGlobalFlags(args)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 	if debug {
 		logging.EnableDebug()
+	}
+
+	if len(args) == 0 && importTRMM {
+		secret := resolveSecret()
+		if err := importFromTacticalRMM(secret); err != nil {
+			log.Fatalf("failed to import Tactical RMM configuration: %v", err)
+		}
+		return
 	}
 
 	implicitMode := false
@@ -46,7 +55,12 @@ func main() {
 	switch normalizeCommand(args[0]) {
 	case "run", "start":
 		secret := resolveSecret()
-		if err := runStandalone(secret); err != nil {
+		if importTRMM {
+			if err := importFromTacticalRMM(secret); err != nil {
+				log.Fatalf("failed to import Tactical RMM configuration: %v", err)
+			}
+		}
+		if err := runStandalone(secret, offline); err != nil {
 			log.Fatalf("tray execution failed: %v", err)
 		}
 		return
@@ -57,6 +71,11 @@ func main() {
 	}
 
 	secret := resolveSecret()
+	if importTRMM {
+		if err := importFromTacticalRMM(secret); err != nil {
+			log.Fatalf("failed to import Tactical RMM configuration: %v", err)
+		}
+	}
 	cfg, err := config.Load(secret)
 	if err != nil {
 		log.Fatalf("failed to load configuration: %v", err)
@@ -67,11 +86,11 @@ func main() {
 	}
 }
 
-func runStandalone(secret string) error {
+func runStandalone(secret string, offline bool) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	runner := menu.NewRunner(secret)
+	runner := menu.NewRunner(secret, offline)
 	if err := runner.Start(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
@@ -125,8 +144,10 @@ func normalizeCommand(arg string) string {
 	return strings.ToLower(trimmed)
 }
 
-func parseGlobalFlags(args []string) ([]string, bool, error) {
+func parseGlobalFlags(args []string) ([]string, bool, bool, bool, error) {
 	debugEnabled := false
+	offlineEnabled := false
+	importTRMM := false
 	filtered := make([]string, 0, len(args))
 
 	for _, arg := range args {
@@ -144,11 +165,97 @@ func parseGlobalFlags(args []string) ([]string, bool, error) {
 			}
 			debugEnabled = parsed
 			continue
+		case lower == "offline":
+			offlineEnabled = true
+			continue
+		case strings.HasPrefix(lower, "offline="):
+			value := strings.TrimPrefix(lower, "offline=")
+			parsed, err := strconv.ParseBool(value)
+			if err != nil {
+				return nil, false, false, false, fmt.Errorf("invalid value for --offline: %s", arg)
+			}
+			offlineEnabled = parsed
+			continue
+		case lower == "importtrmm":
+			importTRMM = true
+			continue
+		case strings.HasPrefix(lower, "importtrmm="):
+			value := strings.TrimPrefix(lower, "importtrmm=")
+			parsed, err := strconv.ParseBool(value)
+			if err != nil {
+				return nil, false, false, false, fmt.Errorf("invalid value for --importtrmm: %s", arg)
+			}
+			importTRMM = parsed
+			continue
 		}
 		filtered = append(filtered, arg)
 	}
 
-	return filtered, debugEnabled, nil
+	return filtered, debugEnabled, offlineEnabled, importTRMM, nil
+}
+
+func importFromTacticalRMM(secret string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cfg, err := config.Load(secret)
+	if err != nil {
+		return fmt.Errorf("load configuration: %w", err)
+	}
+
+	options := trmm.DetectOptions()
+	trayData, err := trmm.FetchTrayData(ctx, nil, options)
+	if err != nil {
+		return fmt.Errorf("fetch Tactical RMM tray data: %w", err)
+	}
+	if trayData == nil || len(trayData.MenuItems) == 0 {
+		return errors.New("Tactical RMM did not provide any tray menu items to import")
+	}
+
+	items := make([]config.MenuItem, len(trayData.MenuItems))
+	copy(items, trayData.MenuItems)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	seen := make(map[string]struct{}, len(items))
+	for idx := range items {
+		item := items[idx]
+		if strings.TrimSpace(item.ID) == "" {
+			item.ID = menu.GenerateID(items[:idx], item.ParentID, item.Type)
+		}
+		if _, exists := seen[item.ID]; exists {
+			return fmt.Errorf("duplicate Tactical RMM menu item id %s", item.ID)
+		}
+		seen[item.ID] = struct{}{}
+
+		if item.CreatedUTC == "" {
+			item.CreatedUTC = now
+		}
+		if item.UpdatedUTC == "" {
+			item.UpdatedUTC = item.CreatedUTC
+		}
+
+		if err := validateItem(item); err != nil {
+			return fmt.Errorf("item %s invalid: %w", item.ID, err)
+		}
+
+		items[idx] = item
+	}
+
+	for _, item := range items {
+		if err := menu.ValidateParent(items, item); err != nil {
+			return fmt.Errorf("item %s invalid parent: %w", item.ID, err)
+		}
+	}
+
+	menu.EnsureSequentialOrder(&items)
+
+	cfg.Items = items
+	if err := config.Save(cfg, secret); err != nil {
+		return fmt.Errorf("save configuration: %w", err)
+	}
+
+	fmt.Printf("Imported %d Tactical RMM menu items into local configuration\n", len(items))
+	return nil
 }
 
 func handleAdd(cfg *config.Config, secret string, args []string) error {

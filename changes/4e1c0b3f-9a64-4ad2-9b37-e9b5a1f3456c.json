@@ -1,0 +1,7 @@
+{
+  "guid": "4e1c0b3f-9a64-4ad2-9b37-e9b5a1f3456c",
+  "occurred_at": "2025-05-29T00:00:00Z",
+  "change_type": "Fix",
+  "summary": "Ignore linker -X flags in global CLI parsing to restore builds",
+  "content_hash": "cb8141ec1a46d5cc5e8f34fd7ce795d932f918eec881c694558d6c466f59188f"
+}

@@ -150,7 +150,21 @@ func parseGlobalFlags(args []string) ([]string, bool, bool, bool, error) {
 	importTRMM := false
 	filtered := make([]string, 0, len(args))
 
-	for _, arg := range args {
+	skipNext := false
+	for idx := 0; idx < len(args); idx++ {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+
+		arg := args[idx]
+		if skip, consumeNext := shouldIgnoreBuildFlag(arg); skip {
+			if consumeNext {
+				skipNext = true
+			}
+			continue
+		}
+
 		normalized := strings.TrimSpace(arg)
 		lower := strings.ToLower(strings.TrimLeft(normalized, "-/"))
 		switch {
@@ -192,6 +206,34 @@ func parseGlobalFlags(args []string) ([]string, bool, bool, bool, error) {
 	}
 
 	return filtered, debugEnabled, offlineEnabled, importTRMM, nil
+}
+
+func shouldIgnoreBuildFlag(arg string) (skip bool, consumeNext bool) {
+	trimmed := strings.TrimSpace(arg)
+	if trimmed == "" {
+		return false, false
+	}
+
+	// Accept either '-' or '/' prefix so the logic works on Windows-style switches too.
+	if trimmed[0] != '-' && trimmed[0] != '/' {
+		return false, false
+	}
+
+	flagBody := strings.TrimLeft(trimmed, "-/")
+	if flagBody == "" {
+		return false, false
+	}
+
+	if flagBody[0] != 'X' {
+		return false, false
+	}
+
+	// Handle the "-X value" form by consuming the next argument as well.
+	if len(flagBody) == 1 {
+		return true, true
+	}
+
+	return true, false
 }
 
 func importFromTacticalRMM(secret string) error {

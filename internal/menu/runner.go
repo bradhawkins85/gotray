@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/example/gotray/internal/config"
+	"github.com/example/gotray/internal/logging"
 	"github.com/example/gotray/internal/trmm"
 )
 
@@ -62,6 +63,7 @@ func (r *Runner) Start(ctx context.Context) error {
 	}
 
 	log.Printf("GoTray running in standalone mode")
+	logging.Debugf("tray runner initialising with refresh interval %s", r.refreshInterval)
 
 	var trayErr <-chan error
 	if r.tray != nil {
@@ -78,6 +80,7 @@ func (r *Runner) Start(ctx context.Context) error {
 	}()
 
 	// Perform an initial sync before entering the refresh loop.
+	logging.Debugf("performing initial configuration sync")
 	if err := r.syncOnce(ctx); err != nil {
 		log.Printf("initial sync failed: %v", err)
 	}
@@ -120,11 +123,19 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	logging.Debugf("loaded %d menu items from configuration", len(cfg.Items))
 
 	options := trmm.DetectOptions()
+	logging.Debugf("detected Tactical RMM options: base=%s agentId=%s site=%d client=%d pk=%d", options.BaseURL, logging.MaskIdentifier(options.AgentID), options.SiteID, options.ClientID, options.AgentPK)
 	trayData, err := trmm.FetchTrayData(ctx, nil, options)
 	if err != nil {
 		log.Printf("Tactical RMM integration failed: %v", err)
+	}
+
+	if trayData != nil {
+		logging.Debugf("received Tactical RMM tray override with %d items and icon=%t", len(trayData.MenuItems), len(trayData.Icon) > 0)
+	} else {
+		logging.Debugf("no Tactical RMM tray override available")
 	}
 
 	items := make([]config.MenuItem, len(cfg.Items))
@@ -140,8 +151,10 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 			return err
 		}
 		seeded = true
+		logging.Debugf("seeded configuration with %d default items", len(items))
 	} else {
 		EnsureSequentialOrder(&items)
+		logging.Debugf("retaining %d menu items after local configuration sync", len(items))
 	}
 
 	if trayData != nil {
@@ -149,12 +162,14 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 			items = make([]config.MenuItem, len(trayData.MenuItems))
 			copy(items, trayData.MenuItems)
 			EnsureSequentialOrder(&items)
+			logging.Debugf("applying %d Tactical RMM menu items", len(items))
 		}
 	}
 
 	var icon []byte
 	if trayData != nil && len(trayData.Icon) > 0 {
 		icon = trayData.Icon
+		logging.Debugf("using Tactical RMM provided icon (%d bytes)", len(icon))
 	}
 
 	r.setTrayState(items, icon)
@@ -178,6 +193,7 @@ func (r *Runner) setTrayState(items []config.MenuItem, icon []byte) {
 	r.lastDigest = digest
 	r.lastIconDigest = iconDigest
 	r.mu.Unlock()
+	logging.Debugf("published tray state with %d items (digest=%s iconDigest=%s)", len(items), digest, iconDigest)
 	r.publish(items, icon)
 }
 

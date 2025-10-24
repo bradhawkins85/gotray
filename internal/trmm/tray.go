@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/example/gotray/internal/config"
+	"github.com/example/gotray/internal/logging"
 )
 
 // TrayData represents Tactical RMM custom field data mapped to GoTray constructs.
@@ -136,7 +137,8 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 	apiKey := strings.TrimSpace(opts.APIKey)
 	agentID := strings.TrimSpace(opts.AgentID)
 
-	if baseURL == "" || apiKey == "" || agentID == "" {
+	if baseURL == "" || apiKey == "" {
+		logging.Debugf("skipping Tactical RMM lookup due to missing base URL or API key")
 		return nil, nil
 	}
 
@@ -144,15 +146,33 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 
+	if agentID == "" && opts.AgentPK > 0 {
+		logging.Debugf("resolving Tactical RMM agent primary key %d", opts.AgentPK)
+		resolved, err := resolveAgentIDFromPK(ctx, httpClient, baseURL, apiKey, opts.AgentPK)
+		if err != nil {
+			return nil, err
+		}
+		agentID = resolved
+	}
+
+	if agentID == "" {
+		logging.Debugf("skipping Tactical RMM lookup due to missing agent identifier")
+		return nil, nil
+	}
+
+	logging.Debugf("fetching Tactical RMM data for agent %s", logging.MaskIdentifier(agentID))
+
 	defs, err := fetchCustomFieldDefinitions(ctx, httpClient, baseURL, apiKey)
 	if err != nil {
 		return nil, err
 	}
+	logging.Debugf("retrieved %d Tactical RMM custom field definitions", len(defs))
 
 	agent, err := fetchAgent(ctx, httpClient, baseURL, apiKey, agentID)
 	if err != nil {
 		return nil, err
 	}
+	logging.Debugf("loaded Tactical RMM agent details for %s", logging.MaskIdentifier(agent.AgentID))
 
 	warnings := newMultiError()
 
@@ -167,9 +187,13 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		if err != nil {
 			if errors.Is(err, errNotFound) {
 				warnings.add(fmt.Errorf("site %d not found", siteID))
+				logging.Debugf("site %d not found when fetching Tactical RMM data", siteID)
 			} else {
 				return nil, err
 			}
+		}
+		if site != nil {
+			logging.Debugf("loaded Tactical RMM site %d", site.ID)
 		}
 	}
 
@@ -186,9 +210,13 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		if err != nil {
 			if errors.Is(err, errNotFound) {
 				warnings.add(fmt.Errorf("client %d not found", clientID))
+				logging.Debugf("client %d not found when fetching Tactical RMM data", clientID)
 			} else {
 				return nil, err
 			}
+		}
+		if client != nil {
+			logging.Debugf("loaded Tactical RMM client %d", client.ID)
 		}
 	}
 
@@ -206,8 +234,10 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		decoded, err := decodeBase64(iconValue)
 		if err != nil {
 			warnings.add(fmt.Errorf("decode tray icon: %w", err))
+			logging.Debugf("failed to decode Tactical RMM icon payload: %v", err)
 		} else {
 			iconData = decoded
+			logging.Debugf("decoded Tactical RMM icon payload (%d bytes)", len(iconData))
 		}
 	}
 
@@ -225,8 +255,10 @@ func FetchTrayData(ctx context.Context, httpClient *http.Client, opts Options) (
 		parsed, err := parseMenu(menuValue)
 		if err != nil {
 			warnings.add(fmt.Errorf("parse tray menu: %w", err))
+			logging.Debugf("failed to parse Tactical RMM tray menu JSON: %v", err)
 		} else {
 			menuItems = parsed
+			logging.Debugf("parsed %d Tactical RMM menu items", len(menuItems))
 		}
 	}
 
@@ -347,6 +379,39 @@ func fetchClient(ctx context.Context, httpClient *http.Client, baseURL, apiKey s
 		return nil, err
 	}
 	return &record, nil
+}
+
+func resolveAgentIDFromPK(ctx context.Context, httpClient *http.Client, baseURL, apiKey string, pk int) (string, error) {
+	if pk <= 0 {
+		return "", errors.New("invalid agent primary key")
+	}
+	endpoint, err := joinURL(baseURL, "/agents/")
+	if err != nil {
+		return "", err
+	}
+	endpoint = endpoint + "?detail=1&page_size=2000"
+
+	type agentSummary struct {
+		ID      int    `json:"id"`
+		AgentID string `json:"agent_id"`
+	}
+
+	var summaries []agentSummary
+	if err := getJSON(ctx, httpClient, endpoint, apiKey, &summaries); err != nil {
+		return "", err
+	}
+
+	for _, summary := range summaries {
+		if summary.ID == pk {
+			trimmed := strings.TrimSpace(summary.AgentID)
+			if trimmed == "" {
+				return "", fmt.Errorf("agent %d missing identifier", pk)
+			}
+			logging.Debugf("resolved Tactical RMM agent primary key %d to identifier %s", pk, logging.MaskIdentifier(trimmed))
+			return trimmed, nil
+		}
+	}
+	return "", errNotFound
 }
 
 func joinURL(base, path string) (string, error) {

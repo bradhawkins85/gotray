@@ -10,11 +10,13 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/example/gotray/internal/config"
+	"github.com/example/gotray/internal/logging"
 	"github.com/example/gotray/internal/menu"
 )
 
@@ -22,6 +24,15 @@ func main() {
 	log.SetFlags(0)
 
 	args := os.Args[1:]
+	var err error
+	args, debug, err := parseGlobalFlags(args)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	if debug {
+		logging.EnableDebug()
+	}
+
 	implicitMode := false
 	if len(args) == 0 {
 		implicitMode = true
@@ -112,6 +123,32 @@ func handleCLI(cfg *config.Config, secret string, args []string) error {
 func normalizeCommand(arg string) string {
 	trimmed := strings.TrimLeft(arg, "-/")
 	return strings.ToLower(trimmed)
+}
+
+func parseGlobalFlags(args []string) ([]string, bool, error) {
+	debugEnabled := false
+	filtered := make([]string, 0, len(args))
+
+	for _, arg := range args {
+		normalized := strings.TrimSpace(arg)
+		lower := strings.ToLower(strings.TrimLeft(normalized, "-/"))
+		switch {
+		case lower == "debug":
+			debugEnabled = true
+			continue
+		case strings.HasPrefix(lower, "debug="):
+			value := strings.TrimPrefix(lower, "debug=")
+			parsed, err := strconv.ParseBool(value)
+			if err != nil {
+				return nil, false, fmt.Errorf("invalid value for --debug: %s", arg)
+			}
+			debugEnabled = parsed
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+
+	return filtered, debugEnabled, nil
 }
 
 func handleAdd(cfg *config.Config, secret string, args []string) error {

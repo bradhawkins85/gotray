@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/example/gotray/internal/logging"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -60,6 +61,7 @@ func Path() (string, error) {
 		if err := os.MkdirAll(filepath.Dir(custom), 0o700); err != nil {
 			return "", fmt.Errorf("ensure custom config directory: %w", err)
 		}
+		logging.Debugf("using custom configuration path %s", custom)
 		return custom, nil
 	}
 
@@ -87,6 +89,7 @@ func Load(passphrase string) (*Config, error) {
 		return nil, err
 	}
 
+	logging.Debugf("loading configuration from %s", path)
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return &Config{}, nil
@@ -129,6 +132,7 @@ func Save(cfg *Config, passphrase string) error {
 		return err
 	}
 
+	logging.Debugf("writing encrypted configuration to %s", path)
 	tempFile := path + ".tmp"
 	if err := os.WriteFile(tempFile, data, 0o600); err != nil {
 		return fmt.Errorf("write encrypted config: %w", err)

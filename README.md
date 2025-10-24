@@ -29,6 +29,8 @@ go run ./cmd/gotray run
 
 When the tray starts for the first time it seeds the configuration with a set of defaults and encrypts them using the supplied secret. Subsequent edits are written straight to the encrypted configuration file for that user.
 
+Pass `--debug` to any command (for example, `go run ./cmd/gotray run --debug`) to stream verbose diagnostic logs that detail every action performed by the tray process. Debug logging is disabled by default to protect sensitive environment information.
+
 Detailed platform-specific installation steps for Linux, macOS, and Windows live in [docs/user-setup.md](docs/user-setup.md).
 
 ## Command-line management

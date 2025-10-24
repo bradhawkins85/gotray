@@ -1,0 +1,7 @@
+{
+  "guid": "fbc9fd1c-5beb-428a-afd8-c3e029cf885c",
+  "occurred_at": "2025-10-24T01:55:51Z",
+  "change_type": "Fix",
+  "summary": "Resolve Tactical RMM integration lookup and add debug logging",
+  "content_hash": "3a9fea1627533d76152567c68c35bfc4e192d77ba9563ac8abb2527c5986ae3f"
+}

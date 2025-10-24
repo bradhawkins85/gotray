@@ -12,6 +12,7 @@ type Options struct {
 	BaseURL  string
 	APIKey   string
 	AgentID  string
+	AgentPK  int
 	SiteID   int
 	ClientID int
 }
@@ -22,10 +23,18 @@ func DetectOptions() Options {
 
 	opts := Options{}
 	opts.BaseURL = firstNonEmpty(reg["BaseURL"], os.Getenv("TRMM_BASE_URL"))
-	opts.APIKey = firstNonEmpty(os.Getenv("TRMM_APIKey"), os.Getenv("TRMM_APIKEY"))
+	opts.APIKey = firstNonEmpty(reg["APIKey"], os.Getenv("TRMM_APIKey"), os.Getenv("TRMM_APIKEY"), os.Getenv("TRMM_API_KEY"))
 	opts.AgentID = firstNonEmpty(reg["AgentID"], os.Getenv("TRMM_AGENT_ID"))
+	opts.AgentPK = parseInt(firstNonEmpty(reg["AgentPK"], reg["AgentPk"], os.Getenv("TRMM_AGENT_PK")))
 	opts.SiteID = parseInt(firstNonEmpty(reg["SiteID"], os.Getenv("TRMM_SITE_ID")))
 	opts.ClientID = parseInt(firstNonEmpty(reg["ClientID"], os.Getenv("TRMM_CLIENT_ID")))
+
+	if opts.AgentID != "" {
+		if pk := parseInt(opts.AgentID); pk > 0 {
+			opts.AgentPK = pk
+			opts.AgentID = ""
+		}
+	}
 	return opts
 }
 

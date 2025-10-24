@@ -29,3 +29,11 @@ func TestDetectOptionsAgentIDMatchingAPIKey(t *testing.T) {
 		t.Fatalf("expected AgentID cleared when matching API key, got %q", opts.AgentID)
 	}
 }
+
+func TestDetectOptionsAgentIDFromRegistryAgentPK(t *testing.T) {
+	registry := map[string]string{"AgentPK": "agent-123"}
+	opts := detectOptionsWith(registry, func(string) string { return "" })
+	if opts.AgentID != "agent-123" {
+		t.Fatalf("expected AgentID from registry AgentPK, got %q", opts.AgentID)
+	}
+}

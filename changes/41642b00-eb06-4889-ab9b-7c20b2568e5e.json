@@ -1,0 +1,7 @@
+{
+  "guid": "41642b00-eb06-4889-ab9b-7c20b2568e5e",
+  "occurred_at": "2025-10-24T04:30:12Z",
+  "change_type": "Feature",
+  "summary": "Enforced compile-time embedding of the Tactical RMM API key with a runtime guard.",
+  "content_hash": "73d63fbc276c8f1d7c2821faf14dacd63b201dc07295460315ab8e8574eb2667"
+}

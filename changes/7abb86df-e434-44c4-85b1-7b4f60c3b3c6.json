@@ -1,0 +1,7 @@
+{
+  "guid": "7abb86df-e434-44c4-85b1-7b4f60c3b3c6",
+  "occurred_at": "2025-10-24T01:27:15Z",
+  "change_type": "Fix",
+  "summary": "Align systray controller with payload updates to restore cross-platform builds",
+  "content_hash": "6affe9311acdb744fb224b51f50db8604aac90328174195d156f53b42e7d4857"
+}

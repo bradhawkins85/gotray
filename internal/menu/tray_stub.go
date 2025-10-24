@@ -6,8 +6,6 @@ package menu
 import (
 	"context"
 	"errors"
-
-	"github.com/example/gotray/internal/config"
 )
 
 type trayUnsupported struct{}

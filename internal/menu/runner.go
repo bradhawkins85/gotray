@@ -37,8 +37,9 @@ type Runner struct {
 	lastDigest     string
 	lastIconDigest string
 
-	tray    trayController
-	updates chan UpdatePayload
+	tray            trayController
+	updates         chan UpdatePayload
+	refreshRequests chan struct{}
 }
 
 // NewRunner constructs a Runner that loads menu definitions directly from disk.
@@ -48,8 +49,9 @@ func NewRunner(offline bool) *Runner {
 	r := &Runner{
 		refreshInterval: defaultRefreshInterval,
 		offline:         offline,
+		refreshRequests: make(chan struct{}, 1),
 	}
-	r.tray = newTrayController()
+	r.tray = newTrayController(r.requestRefresh)
 	r.updates = make(chan UpdatePayload, 1)
 	return r
 }
@@ -100,6 +102,11 @@ func (r *Runner) Start(ctx context.Context) error {
 		case <-ticker.C:
 			if err := r.syncOnce(ctx); err != nil {
 				log.Printf("tray refresh failed: %v", err)
+			}
+		case <-r.refreshRequests:
+			logging.Debugf("manual refresh requested")
+			if err := r.syncOnce(ctx); err != nil {
+				log.Printf("manual tray refresh failed: %v", err)
 			}
 		case err := <-trayErr:
 			return err
@@ -199,6 +206,16 @@ func (r *Runner) setTrayState(items []config.MenuItem, icon []byte) {
 	r.mu.Unlock()
 	logging.Debugf("published tray state with %d items (digest=%s iconDigest=%s)", len(items), digest, iconDigest)
 	r.publish(items, icon)
+}
+
+func (r *Runner) requestRefresh() {
+	if r.refreshRequests == nil {
+		return
+	}
+	select {
+	case r.refreshRequests <- struct{}{}:
+	default:
+	}
 }
 
 func (r *Runner) publish(items []config.MenuItem, icon []byte) {

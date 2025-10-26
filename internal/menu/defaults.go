@@ -22,6 +22,15 @@ func DefaultItems() []config.MenuItem {
 		{
 			ID:          "20",
 			Order:       20,
+			Type:        config.MenuItemRefresh,
+			Label:       "Refresh",
+			Description: "Reload the latest configuration",
+			CreatedUTC:  now,
+			UpdatedUTC:  now,
+		},
+		{
+			ID:          "30",
+			Order:       30,
 			Type:        config.MenuItemURL,
 			Label:       "Visit Project",
 			URL:         "https://example.com",
@@ -30,8 +39,8 @@ func DefaultItems() []config.MenuItem {
 			UpdatedUTC:  now,
 		},
 		{
-			ID:          "30",
-			Order:       30,
+			ID:          "40",
+			Order:       40,
 			Type:        config.MenuItemQuit,
 			Label:       "Quit GoTray",
 			Description: "Exit the GoTray application",

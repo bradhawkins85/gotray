@@ -51,6 +51,7 @@ Supported `--type` values are:
 * `command` – launches an executable.
 * `url` – opens the provided link in the default browser.
 * `menu` – creates a submenu container that can hold nested entries.
+* `refresh` – reloads the Tactical RMM or local configuration on demand.
 * `quit` – closes the GoTray application when selected.
 
 Additional switches for `add`:

@@ -10,7 +10,7 @@ import (
 
 type trayUnsupported struct{}
 
-func newTrayController() trayController {
+func newTrayController(_ func()) trayController {
 	return trayUnsupported{}
 }
 

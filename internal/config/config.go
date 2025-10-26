@@ -27,6 +27,7 @@ const (
 	MenuItemURL     MenuItemType = "url"
 	MenuItemMenu    MenuItemType = "menu"
 	MenuItemQuit    MenuItemType = "quit"
+	MenuItemRefresh MenuItemType = "refresh"
 )
 
 // MenuItem represents a single menu entry in the tray.

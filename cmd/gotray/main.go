@@ -200,6 +200,14 @@ func shouldIgnoreBuildFlag(arg string) (skip bool, consumeNext bool) {
 		return false, false
 	}
 
+	// Some build pipelines wrap ldflags in quotes or prefix them with escape
+	// characters (for example, \"-X value\"). Strip those prefixes so we can
+	// reliably detect linker -X arguments regardless of quoting style.
+	trimmed = strings.TrimLeft(trimmed, "\\\"'")
+	if trimmed == "" {
+		return false, false
+	}
+
 	// Accept either '-' or '/' prefix so the logic works on Windows-style switches too.
 	if trimmed[0] != '-' && trimmed[0] != '/' {
 		return false, false
@@ -210,7 +218,12 @@ func shouldIgnoreBuildFlag(arg string) (skip bool, consumeNext bool) {
 		return false, false
 	}
 
-	if flagBody[0] != 'X' {
+	flagBody = strings.TrimLeft(flagBody, "\\\"'")
+	if flagBody == "" {
+		return false, false
+	}
+
+	if flagBody[0] != 'X' && flagBody[0] != 'x' {
 		return false, false
 	}
 

@@ -1,0 +1,7 @@
+{
+  "guid": "cd5022b7-9bf4-43c3-ac35-2816e239371e",
+  "occurred_at": "2025-05-30T00:00:00Z",
+  "change_type": "Fix",
+  "summary": "Handle quoted ldflags -X arguments during CLI parsing",
+  "content_hash": "737b95f1bdcac770413b5f0bce0076334840a0693df3166744e5bb18c1a0ff05"
+}

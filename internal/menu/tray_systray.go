@@ -267,7 +267,7 @@ func groupByParent(items []config.MenuItem) map[string][]config.MenuItem {
 			if grouped[key][i].Order == grouped[key][j].Order {
 				return grouped[key][i].ID < grouped[key][j].ID
 			}
-			return grouped[key][i].Order < grouped[key][j].Order
+			return grouped[key][i].Order > grouped[key][j].Order
 		})
 	}
 	return grouped

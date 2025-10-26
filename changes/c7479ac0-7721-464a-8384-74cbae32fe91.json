@@ -1,0 +1,7 @@
+{
+  "guid": "c7479ac0-7721-464a-8384-74cbae32fe91",
+  "occurred_at": "2025-10-26T04:01:19Z",
+  "change_type": "Fix",
+  "summary": "Replaced encrypted configuration with Base64 storage and removed GOTRAY_SECRET requirement.",
+  "content_hash": "50808fb6adb284aa6bc6d54ad5e7347162dd1996dd387504bcfffda3aba3620a"
+}

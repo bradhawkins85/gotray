@@ -1,25 +1,20 @@
 package config
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/example/gotray/internal/logging"
-	"golang.org/x/crypto/scrypt"
 )
 
 const (
 	configDirName  = "gotray"
-	configFileName = "config.enc"
-	saltSize       = 16
-	nonceSize      = 12
+	configFileName = "config.b64"
 )
 
 // MenuItemType represents the supported menu item types.
@@ -78,12 +73,8 @@ func Path() (string, error) {
 	return filepath.Join(dir, configFileName), nil
 }
 
-// Load retrieves the encrypted configuration using the provided passphrase.
-func Load(passphrase string) (*Config, error) {
-	if passphrase == "" {
-		return nil, errors.New("missing passphrase for configuration decryption")
-	}
-
+// Load retrieves the base64-encoded configuration from disk.
+func Load() (*Config, error) {
 	path, err := Path()
 	if err != nil {
 		return nil, err
@@ -98,9 +89,14 @@ func Load(passphrase string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 
-	data, err := decrypt(raw, passphrase)
+	payload := strings.TrimSpace(string(raw))
+	if payload == "" {
+		return &Config{}, nil
+	}
+
+	data, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt config: %w", err)
+		return nil, fmt.Errorf("decode config: %w", err)
 	}
 
 	var cfg Config
@@ -111,109 +107,26 @@ func Load(passphrase string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Save persists the configuration encrypted with the provided passphrase.
-func Save(cfg *Config, passphrase string) error {
-	if passphrase == "" {
-		return errors.New("missing passphrase for configuration encryption")
-	}
-
+// Save persists the configuration using base64 encoding on disk.
+func Save(cfg *Config) error {
 	raw, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	data, err := encrypt(raw, passphrase)
-	if err != nil {
-		return fmt.Errorf("encrypt config: %w", err)
-	}
+	data := base64.StdEncoding.EncodeToString(raw)
+	data += "\n"
 
 	path, err := Path()
 	if err != nil {
 		return err
 	}
 
-	logging.Debugf("writing encrypted configuration to %s", path)
+	logging.Debugf("writing base64 configuration to %s", path)
 	tempFile := path + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0o600); err != nil {
-		return fmt.Errorf("write encrypted config: %w", err)
+	if err := os.WriteFile(tempFile, []byte(data), 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
 	}
 
 	return os.Rename(tempFile, path)
-}
-
-func encrypt(plaintext []byte, passphrase string) ([]byte, error) {
-	salt := make([]byte, saltSize)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return nil, fmt.Errorf("generate salt: %w", err)
-	}
-
-	key, err := deriveKey(passphrase, salt)
-	if err != nil {
-		return nil, err
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("create cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("create gcm: %w", err)
-	}
-
-	nonce := make([]byte, nonceSize)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("generate nonce: %w", err)
-	}
-
-	sealed := gcm.Seal(nil, nonce, plaintext, nil)
-
-	out := make([]byte, 0, saltSize+nonceSize+len(sealed))
-	out = append(out, salt...)
-	out = append(out, nonce...)
-	out = append(out, sealed...)
-	return out, nil
-}
-
-func decrypt(ciphertext []byte, passphrase string) ([]byte, error) {
-	if len(ciphertext) < saltSize+nonceSize {
-		return nil, errors.New("ciphertext too short")
-	}
-
-	salt := ciphertext[:saltSize]
-	nonce := ciphertext[saltSize : saltSize+nonceSize]
-	payload := ciphertext[saltSize+nonceSize:]
-
-	key, err := deriveKey(passphrase, salt)
-	if err != nil {
-		return nil, err
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("create cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("create gcm: %w", err)
-	}
-
-	return gcm.Open(nil, nonce, payload, nil)
-}
-
-func deriveKey(passphrase string, salt []byte) ([]byte, error) {
-	const (
-		keyLength = 32
-		n         = 1 << 15
-		r         = 8
-		p         = 1
-	)
-
-	key, err := scrypt.Key([]byte(passphrase), salt, n, r, p, keyLength)
-	if err != nil {
-		return nil, fmt.Errorf("derive key: %w", err)
-	}
-	return key, nil
 }

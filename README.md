@@ -1,18 +1,17 @@
 # GoTray
 
-GoTray is a cross-platform system tray helper written in Go. It encrypts its configuration on disk, runs entirely in a user session, and can be driven from the command line for scripted updates. Version 3 simplifies the deployment model so every desktop user launches a stand-alone instance without any background service or IPC layer.
+GoTray is a cross-platform system tray helper written in Go. It persists its configuration on disk using a Base64-encoded JSON document, runs entirely in a user session, and can be driven from the command line for scripted updates. Version 3 simplifies the deployment model so every desktop user launches a stand-alone instance without any background service or IPC layer.
 
 ## Prerequisites
 
 * Go 1.21 or newer
-* A strong passphrase exported as the `GOTRAY_SECRET` environment variable when running the tray or CLI commands. This secret encrypts and decrypts the menu configuration on disk.
 * (Optional, but required when compiling release binaries) A Tactical RMM API credential exported as `TRMM_APIKEY`. The CI workflow embeds this key so release builds can talk to Tactical RMM without requiring runtime secrets. Local development can provide the value via the environment or allow runtime configuration by setting `GOTRAY_ALLOW_RUNTIME_TRMM_APIKEY`.
 
-Release artifacts compiled through GitHub Actions embed these secrets at build time using the `GOTRAY_SECRET` and `TRMM_APIKEY` repository secrets. The workflow now fails fast if either secret is missing to prevent distributing binaries without the required credentials. For local development you can continue to supply them through your shell environment or a `.env` file.
+Release artifacts compiled through GitHub Actions embed the `TRMM_APIKEY` repository secret at build time. For local development you can supply it through your shell environment or a `.env` file.
 
 Optional environment variables:
 
-* `GOTRAY_CONFIG_PATH` – overrides the default configuration location. By default the encrypted file is stored in `~/.config/gotray/config.enc` (respecting your operating system's user configuration directory).
+* `GOTRAY_CONFIG_PATH` – overrides the default configuration location. By default the Base64 file is stored in `~/.config/gotray/config.b64` (respecting your operating system's user configuration directory).
 * `GOTRAY_RUN_MODE` – set the default sub-command when no CLI arguments are supplied. Defaults to `run` so the binary behaves as a long-running tray application for the invoking user.
 
 You can copy `.env.example` and adjust it to suit your environment:
@@ -26,11 +25,10 @@ cp .env.example .env
 Build the binary and launch it within the target desktop session:
 
 ```bash
-export GOTRAY_SECRET="your-strong-passphrase"
 go run ./cmd/gotray run
 ```
 
-When the tray starts for the first time it seeds the configuration with a set of defaults and encrypts them using the supplied secret. Subsequent edits are written straight to the encrypted configuration file for that user.
+When the tray starts for the first time it seeds the configuration with a set of defaults and writes them to the Base64 configuration file for that user. Subsequent edits are written straight to that file.
 
 Pass `--debug` to any command (for example, `go run ./cmd/gotray run --debug`) to stream verbose diagnostic logs that detail every action performed by the tray process. Debug logging is disabled by default to protect sensitive environment information.
 
@@ -152,7 +150,7 @@ You can also read the payload from a file:
 go run ./cmd/gotray import --file backup.txt
 ```
 
-During import the CLI validates every menu item and ensures parent-child relationships remain intact before encrypting the configuration again.
+During import the CLI validates every menu item and ensures parent-child relationships remain intact before persisting the configuration.
 
 ### Exit codes and errors
 
@@ -160,13 +158,12 @@ All commands return a non-zero exit code on error and print a helpful message de
 
 ## Configuration storage
 
-* Configurations are encrypted with AES-GCM using a key derived from your `GOTRAY_SECRET` via scrypt.
+* Configurations are stored as Base64-encoded JSON without additional encryption. Guard access to the containing directory to protect sensitive commands or URLs.
 * The file is replaced atomically on save to protect against partial writes.
 * Timestamps are stored in UTC and include both creation and last-updated times.
 
 ## Troubleshooting
 
-* **"GOTRAY_SECRET environment variable is required"** – ensure the variable is exported before running the tray or CLI commands.
 * **"unknown command" errors** – verify that you spelled the verb correctly (`add`, `update`, `delete`, `list`, `move`, `export`, `import`).
 * **"item with id ... not found"** – use `go run ./cmd/gotray list` to confirm the identifier before updating or deleting.
 

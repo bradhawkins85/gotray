@@ -20,7 +20,6 @@ import (
 // Service coordinates the system-level background process that brokers menu
 // state to user-session tray agents.
 type Service struct {
-	secret   string
 	token    string
 	endpoint ipc.Endpoint
 
@@ -28,15 +27,14 @@ type Service struct {
 	cfg *config.Config
 }
 
-// New constructs a Service using the provided encryption secret.
-func New(secret string) (*Service, error) {
+// New constructs a Service that provides the current tray configuration.
+func New() (*Service, error) {
 	srv := &Service{
-		secret:   secret,
-		token:    security.ResolveServiceToken(secret),
+		token:    security.ResolveServiceToken(),
 		endpoint: ipc.DefaultEndpoint(),
 	}
 	if srv.token == "" {
-		return nil, fmt.Errorf("service token could not be resolved; set GOTRAY_SERVICE_TOKEN or GOTRAY_SECRET")
+		return nil, fmt.Errorf("service token could not be resolved; set GOTRAY_SERVICE_TOKEN")
 	}
 
 	if _, err := srv.currentConfig(); err != nil {
@@ -130,7 +128,7 @@ func (s *Service) authorize(token string) bool {
 }
 
 func (s *Service) currentConfig() (*config.Config, error) {
-	cfg, err := config.Load(s.secret)
+	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -138,7 +136,7 @@ func (s *Service) currentConfig() (*config.Config, error) {
 	if len(cfg.Items) == 0 {
 		cfg.Items = menu.DefaultItems()
 		menu.EnsureSequentialOrder(&cfg.Items)
-		if err := config.Save(cfg, s.secret); err != nil {
+		if err := config.Save(cfg); err != nil {
 			return nil, fmt.Errorf("seed defaults: %w", err)
 		}
 	} else {

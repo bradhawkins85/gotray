@@ -1,5 +1,6 @@
 # Change Log
 
+- 2025-10-26T09:44:31Z - Feature - Added refresh tray menu action to reload Tactical RMM configuration on demand.
 - 2025-10-26T04:01:19Z - Fix - Removed GOTRAY_SECRET dependency and switched configuration storage to Base64-encoded JSON.
 - 2025-10-22T22:30:00Z - Feature - Simplified GoTray into a stand-alone per-user tray, refreshed installers, documentation, and configuration defaults.
 - 2025-10-22T21:07:29Z - Feature - Added CLI commands to export and import menu configurations as Base64 strings, including documentation updates.

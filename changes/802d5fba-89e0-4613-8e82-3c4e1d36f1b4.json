@@ -1,0 +1,7 @@
+{
+  "guid": "802d5fba-89e0-4613-8e82-3c4e1d36f1b4",
+  "occurred_at": "2025-10-26T09:44:31Z",
+  "change_type": "Feature",
+  "summary": "Add refresh tray menu option to reload Tactical RMM configuration on demand",
+  "content_hash": "8afa55946aa9663e1d8db2e6487b04e9797ab971ffbb703decee5d5ed432e285"
+}

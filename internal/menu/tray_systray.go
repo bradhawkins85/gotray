@@ -22,6 +22,7 @@ type systrayController struct {
 	mu      sync.Mutex
 	entries []trayEntry
 	icon    []byte
+	refresh func()
 }
 
 type trayEntry struct {
@@ -29,8 +30,8 @@ type trayEntry struct {
 	cancel context.CancelFunc
 }
 
-func newTrayController() trayController {
-	return &systrayController{}
+func newTrayController(refresh func()) trayController {
+	return &systrayController{refresh: refresh}
 }
 
 func (c *systrayController) Run(ctx context.Context, updates <-chan UpdatePayload) error {
@@ -182,6 +183,23 @@ func (c *systrayController) addMenuItem(ctx context.Context, item config.MenuIte
 			}
 		}(mi.ClickedCh)
 		return []trayEntry{{item: mi, cancel: cancel}}
+	case config.MenuItemRefresh:
+		mi := c.makeMenuItem(parent, item)
+		ctxItem, cancel := context.WithCancel(ctx)
+		go func(ch <-chan struct{}) {
+			for {
+				select {
+				case <-ctxItem.Done():
+					return
+				case _, ok := <-ch:
+					if !ok {
+						return
+					}
+					go c.triggerRefresh()
+				}
+			}
+		}(mi.ClickedCh)
+		return []trayEntry{{item: mi, cancel: cancel}}
 	case config.MenuItemURL:
 		mi := c.makeMenuItem(parent, item)
 		ctxItem, cancel := context.WithCancel(ctx)
@@ -214,6 +232,15 @@ func (c *systrayController) makeMenuItem(parent *systray.MenuItem, item config.M
 		return systray.AddMenuItem(item.Label, item.Description)
 	}
 	return parent.AddSubMenuItem(item.Label, item.Description)
+}
+
+func (c *systrayController) triggerRefresh() {
+	c.mu.Lock()
+	refresh := c.refresh
+	c.mu.Unlock()
+	if refresh != nil {
+		refresh()
+	}
 }
 
 func drainClicks(ctx context.Context, ch <-chan struct{}) {

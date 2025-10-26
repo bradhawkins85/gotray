@@ -288,7 +288,7 @@ func importFromTacticalRMM() error {
 
 func handleAdd(cfg *config.Config, args []string) error {
 	fs := newFlagSet("add")
-	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url, menu, quit")
+	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url, menu, refresh, quit")
 	label := fs.String("label", "", "display label")
 	command := fs.String("command", "", "command or executable path")
 	argList := fs.String("args", "", "comma-separated command arguments")
@@ -673,6 +673,10 @@ func validateItem(item config.MenuItem) error {
 	case config.MenuItemDivider:
 		if item.Label == "" {
 			return errors.New("divider items require --label")
+		}
+	case config.MenuItemRefresh:
+		if item.Label == "" {
+			return errors.New("refresh items require --label")
 		}
 	case config.MenuItemQuit:
 		if item.Label == "" {

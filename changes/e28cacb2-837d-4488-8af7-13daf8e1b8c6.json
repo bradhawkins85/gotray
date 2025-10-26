@@ -1,0 +1,7 @@
+{
+  "guid": "e28cacb2-837d-4488-8af7-13daf8e1b8c6",
+  "occurred_at": "2025-10-26T11:17:26Z",
+  "change_type": "Fix",
+  "summary": "Reverse menu rendering order so lower item numbers appear higher in the tray",
+  "content_hash": "78d796d67ffba1f867ab61e423675d8ec4d02200c445eb3a0851fce644a53789"
+}

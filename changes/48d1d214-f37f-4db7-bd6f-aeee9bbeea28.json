@@ -1,0 +1,7 @@
+{
+  "guid": "48d1d214-f37f-4db7-bd6f-aeee9bbeea28",
+  "occurred_at": "2025-10-26T11:26:58Z",
+  "change_type": "Fix",
+  "summary": "Removed GOTRAY_SECRET build requirement and fixed ldflags handling in CI workflow.",
+  "content_hash": "271e599cb9198001e8a1b090495a44d15d2f353e76d744107e3a8249d006d243"
+}

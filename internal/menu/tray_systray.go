@@ -7,9 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/url"
 	"os/exec"
-	"runtime"
 	"sort"
 	"sync"
 
@@ -40,9 +38,7 @@ func (c *systrayController) Run(ctx context.Context, updates <-chan UpdatePayloa
 	go systray.Run(func() {
 		icon := cloneDefaultIcon()
 		systray.SetIcon(icon)
-		if runtime.GOOS == "darwin" {
-			systray.SetTemplateIcon(icon, icon)
-		}
+		setTemplateIcon(icon)
 		systray.SetTooltip("GoTray")
 		go c.listen(ctx, updates)
 	}, func() {
@@ -89,9 +85,7 @@ func (c *systrayController) applyIcon(data []byte) {
 	c.mu.Unlock()
 
 	systray.SetIcon(resolved)
-	if runtime.GOOS == "darwin" {
-		systray.SetTemplateIcon(resolved, resolved)
-	}
+	setTemplateIcon(resolved)
 }
 
 func (c *systrayController) render(ctx context.Context, items []config.MenuItem) {
@@ -292,22 +286,4 @@ func executeCommand(ctx context.Context, command string, args []string, workingD
 		cmd.Dir = workingDir
 	}
 	_ = cmd.Start()
-}
-
-func openURL(raw string) {
-	if raw == "" {
-		return
-	}
-	if _, err := url.ParseRequestURI(raw); err != nil {
-		return
-	}
-
-	switch runtime.GOOS {
-	case "windows":
-		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", raw).Start()
-	case "darwin":
-		_ = exec.Command("open", raw).Start()
-	default:
-		_ = exec.Command("xdg-open", raw).Start()
-	}
 }

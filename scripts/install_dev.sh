@@ -42,7 +42,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   sudo chmod 0600 "${ENV_FILE}"
 fi
 CONFIG_DIR="${CONFIG_ROOT}/${TARGET_USER}"
-CONFIG_PATH="${CONFIG_DIR}/config.enc"
+CONFIG_PATH="${CONFIG_DIR}/config.b64"
 if ! sudo grep -q '^GOTRAY_CONFIG_PATH=' "${ENV_FILE}" 2>/dev/null; then
   printf '\nGOTRAY_CONFIG_PATH=%s\n' "${CONFIG_PATH}" | sudo tee -a "${ENV_FILE}" >/dev/null
 fi
@@ -62,7 +62,7 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=-${ENV_ROOT}/dev-%i.env
-Environment=GOTRAY_CONFIG_PATH=${CONFIG_ROOT}/%i/config.enc
+Environment=GOTRAY_CONFIG_PATH=${CONFIG_ROOT}/%i/config.b64
 ExecStart=${BIN_PATH} run
 Restart=on-failure
 User=%i

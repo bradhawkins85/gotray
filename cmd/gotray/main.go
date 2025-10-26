@@ -35,8 +35,7 @@ func main() {
 	}
 
 	if len(args) == 0 && importTRMM {
-		secret := resolveSecret()
-		if err := importFromTacticalRMM(secret); err != nil {
+		if err := importFromTacticalRMM(); err != nil {
 			log.Fatalf("failed to import Tactical RMM configuration: %v", err)
 		}
 		return
@@ -54,13 +53,12 @@ func main() {
 
 	switch normalizeCommand(args[0]) {
 	case "run", "start":
-		secret := resolveSecret()
 		if importTRMM {
-			if err := importFromTacticalRMM(secret); err != nil {
+			if err := importFromTacticalRMM(); err != nil {
 				log.Fatalf("failed to import Tactical RMM configuration: %v", err)
 			}
 		}
-		if err := runStandalone(secret, offline); err != nil {
+		if err := runStandalone(offline); err != nil {
 			log.Fatalf("tray execution failed: %v", err)
 		}
 		return
@@ -70,27 +68,26 @@ func main() {
 		log.Fatalf("unknown run mode %q; specify run, add, update, delete, list, move, export, or import", args[0])
 	}
 
-	secret := resolveSecret()
 	if importTRMM {
-		if err := importFromTacticalRMM(secret); err != nil {
+		if err := importFromTacticalRMM(); err != nil {
 			log.Fatalf("failed to import Tactical RMM configuration: %v", err)
 		}
 	}
-	cfg, err := config.Load(secret)
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 
-	if err := handleCLI(cfg, secret, args); err != nil {
+	if err := handleCLI(cfg, args); err != nil {
 		log.Fatalf("%v", err)
 	}
 }
 
-func runStandalone(secret string, offline bool) error {
+func runStandalone(offline bool) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	runner := menu.NewRunner(secret, offline)
+	runner := menu.NewRunner(offline)
 	if err := runner.Start(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
@@ -100,18 +97,7 @@ func runStandalone(secret string, offline bool) error {
 	return nil
 }
 
-func resolveSecret() string {
-	secret := strings.TrimSpace(config.CompiledSecret)
-	if secret == "" {
-		secret = strings.TrimSpace(os.Getenv("GOTRAY_SECRET"))
-	}
-	if secret == "" {
-		log.Fatal("GOTRAY_SECRET secret is required; configure the GOTRAY_SECRET GitHub secret or set the GOTRAY_SECRET environment variable for local development")
-	}
-	return secret
-}
-
-func handleCLI(cfg *config.Config, secret string, args []string) error {
+func handleCLI(cfg *config.Config, args []string) error {
 	if len(args) == 0 {
 		return errors.New("no command provided")
 	}
@@ -121,19 +107,19 @@ func handleCLI(cfg *config.Config, secret string, args []string) error {
 	command := normalizeCommand(args[0])
 	switch command {
 	case "add":
-		return handleAdd(cfg, secret, args[1:])
+		return handleAdd(cfg, args[1:])
 	case "update":
-		return handleUpdate(cfg, secret, args[1:])
+		return handleUpdate(cfg, args[1:])
 	case "delete":
-		return handleDelete(cfg, secret, args[1:])
+		return handleDelete(cfg, args[1:])
 	case "list":
 		return handleList(cfg)
 	case "move":
-		return handleMove(cfg, secret, args[1:])
+		return handleMove(cfg, args[1:])
 	case "export":
 		return handleExport(cfg)
 	case "import":
-		return handleImport(cfg, secret, args[1:])
+		return handleImport(cfg, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -236,11 +222,11 @@ func shouldIgnoreBuildFlag(arg string) (skip bool, consumeNext bool) {
 	return true, false
 }
 
-func importFromTacticalRMM(secret string) error {
+func importFromTacticalRMM() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cfg, err := config.Load(secret)
+	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
@@ -292,7 +278,7 @@ func importFromTacticalRMM(secret string) error {
 	menu.EnsureSequentialOrder(&items)
 
 	cfg.Items = items
-	if err := config.Save(cfg, secret); err != nil {
+	if err := config.Save(cfg); err != nil {
 		return fmt.Errorf("save configuration: %w", err)
 	}
 
@@ -300,7 +286,7 @@ func importFromTacticalRMM(secret string) error {
 	return nil
 }
 
-func handleAdd(cfg *config.Config, secret string, args []string) error {
+func handleAdd(cfg *config.Config, args []string) error {
 	fs := newFlagSet("add")
 	itemType := fs.String("type", string(config.MenuItemText), "menu item type: text, divider, command, url, menu, quit")
 	label := fs.String("label", "", "display label")
@@ -354,7 +340,7 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 
 	cfg.Items = menu.InsertItem(cfg.Items, idx, item)
 	menu.EnsureSequentialOrder(&cfg.Items)
-	if err := config.Save(cfg, secret); err != nil {
+	if err := config.Save(cfg); err != nil {
 		return err
 	}
 
@@ -362,7 +348,7 @@ func handleAdd(cfg *config.Config, secret string, args []string) error {
 	return nil
 }
 
-func handleUpdate(cfg *config.Config, secret string, args []string) error {
+func handleUpdate(cfg *config.Config, args []string) error {
 	fs := newFlagSet("update")
 	id := fs.String("id", "", "identifier of the menu item to update")
 	itemType := fs.String("type", "", "new item type")
@@ -424,7 +410,7 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 
 	cfg.Items[idx] = item
 	menu.EnsureSequentialOrder(&cfg.Items)
-	if err := config.Save(cfg, secret); err != nil {
+	if err := config.Save(cfg); err != nil {
 		return err
 	}
 
@@ -432,7 +418,7 @@ func handleUpdate(cfg *config.Config, secret string, args []string) error {
 	return nil
 }
 
-func handleDelete(cfg *config.Config, secret string, args []string) error {
+func handleDelete(cfg *config.Config, args []string) error {
 	fs := newFlagSet("delete")
 	id := fs.String("id", "", "identifier of the menu item to delete")
 	label := fs.String("label", "", "label of the menu item to delete")
@@ -453,7 +439,7 @@ func handleDelete(cfg *config.Config, secret string, args []string) error {
 		}
 
 		cfg.Items = nil
-		if err := config.Save(cfg, secret); err != nil {
+		if err := config.Save(cfg); err != nil {
 			return err
 		}
 
@@ -482,7 +468,7 @@ func handleDelete(cfg *config.Config, secret string, args []string) error {
 	removed := cfg.Items[idx]
 	cfg.Items = menu.RemoveIndex(cfg.Items, idx)
 	menu.EnsureSequentialOrder(&cfg.Items)
-	if err := config.Save(cfg, secret); err != nil {
+	if err := config.Save(cfg); err != nil {
 		return err
 	}
 
@@ -494,7 +480,7 @@ func handleDelete(cfg *config.Config, secret string, args []string) error {
 	return nil
 }
 
-func handleMove(cfg *config.Config, secret string, args []string) error {
+func handleMove(cfg *config.Config, args []string) error {
 	fs := newFlagSet("move")
 	id := fs.String("id", "", "identifier of the menu item to move")
 	label := fs.String("label", "", "label of the menu item to move")
@@ -540,7 +526,7 @@ func handleMove(cfg *config.Config, secret string, args []string) error {
 	cfg.Items = menu.InsertItem(cfg.Items, target, item)
 	menu.EnsureSequentialOrder(&cfg.Items)
 
-	if err := config.Save(cfg, secret); err != nil {
+	if err := config.Save(cfg); err != nil {
 		return err
 	}
 
@@ -576,7 +562,7 @@ func handleExport(cfg *config.Config) error {
 	return nil
 }
 
-func handleImport(cfg *config.Config, secret string, args []string) error {
+func handleImport(cfg *config.Config, args []string) error {
 	fs := newFlagSet("import")
 	dataFlag := fs.String("data", "", "base64-encoded configuration payload")
 	fileFlag := fs.String("file", "", "path to a file containing the base64 payload")
@@ -649,7 +635,7 @@ func handleImport(cfg *config.Config, secret string, args []string) error {
 
 	menu.EnsureSequentialOrder(&imported.Items)
 	cfg.Items = imported.Items
-	if err := config.Save(cfg, secret); err != nil {
+	if err := config.Save(cfg); err != nil {
 		return err
 	}
 

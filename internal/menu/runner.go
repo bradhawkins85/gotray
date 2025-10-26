@@ -5,9 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +29,6 @@ type UpdatePayload struct {
 }
 
 type Runner struct {
-	secret          string
 	refreshInterval time.Duration
 	offline         bool
 
@@ -44,12 +41,11 @@ type Runner struct {
 	updates chan UpdatePayload
 }
 
-// NewRunner constructs a Runner that loads menu definitions directly from disk
-// using the provided secret. When offline is true Tactical RMM synchronisation
-// is disabled and local configuration is used exclusively.
-func NewRunner(secret string, offline bool) *Runner {
+// NewRunner constructs a Runner that loads menu definitions directly from disk.
+// When offline is true Tactical RMM synchronisation is disabled and local
+// configuration is used exclusively.
+func NewRunner(offline bool) *Runner {
 	r := &Runner{
-		secret:          strings.TrimSpace(secret),
 		refreshInterval: defaultRefreshInterval,
 		offline:         offline,
 	}
@@ -58,13 +54,9 @@ func NewRunner(secret string, offline bool) *Runner {
 	return r
 }
 
-// Start loads the encrypted configuration from disk and periodically refreshes
+// Start loads the configuration from disk and periodically refreshes
 // the tray menu. It blocks until the provided context is canceled.
 func (r *Runner) Start(ctx context.Context) error {
-	if r.secret == "" {
-		return errors.New("missing secret; set GOTRAY_SECRET before starting the tray")
-	}
-
 	if r.offline {
 		log.Printf("GoTray running in offline mode; Tactical RMM sync disabled")
 	} else {
@@ -126,7 +118,7 @@ func (r *Runner) LatestItems() []config.MenuItem {
 }
 
 func (r *Runner) syncOnce(ctx context.Context) error {
-	cfg, err := config.Load(r.secret)
+	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
@@ -159,7 +151,7 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 		EnsureSequentialOrder(&items)
 		cfg.Items = make([]config.MenuItem, len(items))
 		copy(cfg.Items, items)
-		if err := config.Save(cfg, r.secret); err != nil {
+		if err := config.Save(cfg); err != nil {
 			return err
 		}
 		seeded = true

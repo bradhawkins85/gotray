@@ -1,5 +1,6 @@
 # Change Log
 
+- 2025-10-26T11:51:32Z - Feature - Optimized GoTray builds with size-focused flags, optional UPX compression, and documented release process (8987628→6074552 bytes CGO-disabled linux binary).
 - 2025-10-26T11:26:58Z - Fix - Removed GOTRAY_SECRET build requirement and fixed ldflags handling in CI workflow.
 - 2025-10-26T09:44:31Z - Feature - Added refresh tray menu action to reload Tactical RMM configuration on demand.
 - 2025-10-26T04:01:19Z - Fix - Removed GOTRAY_SECRET dependency and switched configuration storage to Base64-encoded JSON.

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 APP_NAME="gotray"
-INSTALL_DIR="/opt/${APP_NAME}"
-BIN_PATH="${INSTALL_DIR}/${APP_NAME}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TARGET_USER="${GOTRAY_INSTALL_USER:-${SUDO_USER:-${USER}}}"
+OUTPUT_DIR="${GOTRAY_OUTPUT_DIR:-${REPO_DIR}/dist}"
+TARGET_OS="${GOOS:-$(go env GOOS)}"
+TARGET_ARCH="${GOARCH:-$(go env GOARCH)}"
 GO_BUILD_FLAGS=(-trimpath "-ldflags=-s -w")
 GOTRAY_ENABLE_COMPRESSION="${GOTRAY_ENABLE_COMPRESSION:-0}"
 GOTRAY_COMPRESSION_TOOL="${GOTRAY_COMPRESSION_TOOL:-upx}"
@@ -21,11 +21,9 @@ should_compress() {
     return 1
   fi
 
-  local target_os
-  target_os="${GOOS:-$(go env GOOS)}"
   for disabled in ${GOTRAY_SKIP_COMPRESSION_OS}; do
-    if [[ "${target_os}" == "${disabled}" ]]; then
-      log "Skipping compression because ${target_os} is in the disabled list"
+    if [[ "${TARGET_OS}" == "${disabled}" ]]; then
+      log "Skipping compression because ${TARGET_OS} is in the disabled list"
       return 1
     fi
   done
@@ -52,20 +50,25 @@ maybe_compress_binary() {
   fi
 }
 
-log "Pulling latest source"
-if [[ -d "${REPO_DIR}/.git" ]]; then
-  (cd "${REPO_DIR}" && git pull --rebase)
+if ! command -v go >/dev/null 2>&1; then
+  log "Go toolchain is required"
+  exit 1
 fi
 
-log "Building updated binary"
+mkdir -p "${OUTPUT_DIR}"
+
+BINARY_NAME="${APP_NAME}-${TARGET_OS}-${TARGET_ARCH}"
+if [[ "${TARGET_OS}" == "windows" ]]; then
+  BINARY_NAME+=".exe"
+fi
+BIN_PATH="${OUTPUT_DIR}/${BINARY_NAME}"
+
+log "Building ${APP_NAME} for ${TARGET_OS}/${TARGET_ARCH}"
 (
   cd "${REPO_DIR}"
-  go build "${GO_BUILD_FLAGS[@]}" -o "${BIN_PATH}" ./cmd/gotray
+  GOOS="${TARGET_OS}" GOARCH="${TARGET_ARCH}" go build "${GO_BUILD_FLAGS[@]}" -o "${BIN_PATH}" ./cmd/gotray
 )
-sudo chmod 0755 "${BIN_PATH}"
+chmod 0755 "${BIN_PATH}"
 maybe_compress_binary "${BIN_PATH}"
 
-log "Restarting user service gotray@${TARGET_USER}.service"
-sudo systemctl restart "${APP_NAME}@${TARGET_USER}.service"
-
-log "Update complete"
+log "Release artifact stored at ${BIN_PATH}"

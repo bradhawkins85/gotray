@@ -20,6 +20,23 @@ You can copy `.env.example` and adjust it to suit your environment:
 cp .env.example .env
 ```
 
+## Building optimized binaries
+
+GoTray ships with helper scripts that standardise production builds around
+size-focused compiler flags. When building manually, apply the same flags to
+strip debug metadata and remove absolute paths from the resulting binary:
+
+```bash
+go build -trimpath -ldflags="-s -w" -o bin/gotray ./cmd/gotray
+```
+
+The `scripts/build_release.sh` wrapper automates cross-compilation and honours
+the same linker flags. It produces `dist/gotray-<GOOS>-<GOARCH>` binaries by
+default and accepts the standard `GOOS`/`GOARCH` environment variables to
+target other platforms. Release automation can opt into UPX compression by
+exporting `GOTRAY_ENABLE_COMPRESSION=1`; compression is skipped automatically
+for platforms (such as macOS) listed in `GOTRAY_SKIP_COMPRESSION_OS`.
+
 ## Running the stand-alone tray application
 
 Build the binary and launch it within the target desktop session:

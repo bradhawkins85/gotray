@@ -1,0 +1,7 @@
+{
+  "guid": "02707abc-f65d-412a-8bd9-6d20ad197e7b",
+  "occurred_at": "2025-10-27T06:33:25.976598Z",
+  "change_type": "Fix",
+  "summary": "Add --console switch to keep the Windows console visible on demand",
+  "content_hash": "bb9a5f6a4f6bc2c045e8cd0e1017ec83424cb320389845c372dae92df23d69e2"
+}

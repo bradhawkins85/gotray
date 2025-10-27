@@ -187,6 +187,13 @@ func parseGlobalFlags(args []string) ([]string, bool, bool, bool, error) {
 			}
 			importTRMM = parsed
 			continue
+		case lower == "console":
+			continue
+		case strings.HasPrefix(lower, "console="):
+			if _, err := strconv.ParseBool(strings.TrimPrefix(lower, "console=")); err != nil {
+				return nil, false, false, false, fmt.Errorf("invalid value for --console: %s", arg)
+			}
+			continue
 		}
 		filtered = append(filtered, arg)
 	}

@@ -1,0 +1,7 @@
+{
+  "guid": "2cea08de-d6fb-4856-9de4-f623891752f8",
+  "occurred_at": "2025-10-27T02:28:47Z",
+  "change_type": "Fix",
+  "summary": "Leave Windows release binaries unstripped to prevent Trojan:Script/Wacatac.B!ml detections.",
+  "content_hash": "f6a7142f4e5141331c739550e610523de8e0fef1b4abf188418ad877c8b262a0"
+}

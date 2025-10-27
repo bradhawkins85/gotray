@@ -41,6 +41,7 @@ To install for additional users, repeat the process with a different `GOTRAY_INS
 2. Open Task Scheduler and create a new task that runs `gotray.exe run` at logon for the desired user.
 3. Define optional user environment variables before launching the task:
    - `GOTRAY_CONFIG_PATH`
+   - `GOTRAY_STRIP_SYMBOLS=0` (default) retains debug metadata so Windows Defender does not raise `Trojan:Script/Wacatac.B!ml`. Only set the variable to `1` after validating the binary with your security tooling.
 4. On first run the tray seeds the configuration and stores it in `%APPDATA%\GoTray\config.b64` unless `GOTRAY_CONFIG_PATH` overrides the location.
 
 ## 4. macOS (LaunchAgent)

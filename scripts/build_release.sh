@@ -6,45 +6,15 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OUTPUT_DIR="${GOTRAY_OUTPUT_DIR:-${REPO_DIR}/dist}"
 TARGET_OS="${GOOS:-$(go env GOOS)}"
 TARGET_ARCH="${GOARCH:-$(go env GOARCH)}"
-GO_BUILD_FLAGS=(-trimpath)
+GO_BUILD_FLAGS=(-trimpath "-ldflags=-s -w")
 GOTRAY_ENABLE_COMPRESSION="${GOTRAY_ENABLE_COMPRESSION:-0}"
 GOTRAY_COMPRESSION_TOOL="${GOTRAY_COMPRESSION_TOOL:-upx}"
 GOTRAY_COMPRESSION_ARGS="${GOTRAY_COMPRESSION_ARGS:---best --lzma}"
 GOTRAY_SKIP_COMPRESSION_OS="${GOTRAY_SKIP_COMPRESSION_OS:-darwin}"
-DEFAULT_STRIP_SYMBOLS=1
-if [[ "${TARGET_OS}" == "windows" ]]; then
-  DEFAULT_STRIP_SYMBOLS=0
-fi
-STRIP_SYMBOLS="${GOTRAY_STRIP_SYMBOLS:-${DEFAULT_STRIP_SYMBOLS}}"
-
-configure_ldflags() {
-  local -a ldflags
-  if [[ "${STRIP_SYMBOLS}" == "1" ]]; then
-    ldflags+=(-s -w)
-  fi
-  if [[ -n "${GOTRAY_EXTRA_LDFLAGS:-}" ]]; then
-    # shellcheck disable=SC2206
-    ldflags+=(${GOTRAY_EXTRA_LDFLAGS})
-  fi
-  if [[ ${#ldflags[@]} -eq 0 ]]; then
-    return
-  fi
-
-  local joined
-  joined="$(printf '%s ' "${ldflags[@]}")"
-  joined="${joined% }"
-  GO_BUILD_FLAGS+=("-ldflags=${joined}")
-}
 
 log() {
   printf '[%s] %s\n' "${APP_NAME}" "$1"
 }
-
-if [[ "${STRIP_SYMBOLS}" == "0" ]]; then
-  log "Symbol stripping disabled (GOTRAY_STRIP_SYMBOLS=0)"
-fi
-
-configure_ldflags
 
 should_compress() {
   if [[ "${GOTRAY_ENABLE_COMPRESSION}" != "1" ]]; then

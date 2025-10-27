@@ -19,5 +19,9 @@ func normalizedIcon(data []byte) []byte {
 	if len(data) == 0 {
 		return cloneDefaultIcon()
 	}
-	return cloneIcon(data)
+	normalized := platformNormalizeIcon(data)
+	if len(normalized) == 0 {
+		return cloneDefaultIcon()
+	}
+	return cloneIcon(normalized)
 }

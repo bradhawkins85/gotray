@@ -1,0 +1,7 @@
+{
+  "guid": "642e33ff-13ed-4034-9729-953c069e69e0",
+  "occurred_at": "2025-10-27T05:32:09Z",
+  "change_type": "Fix",
+  "summary": "Normalize Windows tray icons by wrapping PNG data in an ICO container to prevent systray errors.",
+  "content_hash": "af017cad320f2f53ff11919ecec6ef633599fa9777ea0f2032af297ed654143b"
+}

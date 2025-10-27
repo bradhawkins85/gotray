@@ -1,0 +1,7 @@
+{
+  "guid": "fed9cd8c-ae53-42d8-85f4-d7bab26e8901",
+  "occurred_at": "2025-10-27T05:41:00.264102Z",
+  "change_type": "Fix",
+  "summary": "Hide Windows console window when launching the tray app",
+  "content_hash": "99fc18e5c32c3cd2266570113d32bd201567a8939805e2b7a8a659d724d31177"
+}

@@ -1,0 +1,7 @@
+{
+  "guid": "828090ff-003e-4655-848d-d8d2124df070",
+  "occurred_at": "2025-10-27T06:59:35.903366Z",
+  "change_type": "Fix",
+  "summary": "Retry Tactical RMM requests and keep cached tray menu when refreshes fail",
+  "content_hash": "9208343003587de37d1b9530a0454a2a7c6b06231bd9820fe45393ac645f6837"
+}

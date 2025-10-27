@@ -36,6 +36,7 @@ type Runner struct {
 	lastItems      []config.MenuItem
 	lastDigest     string
 	lastIconDigest string
+	lastIcon       []byte
 
 	tray            trayController
 	updates         chan UpdatePayload
@@ -132,14 +133,15 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 	logging.Debugf("loaded %d menu items from configuration", len(cfg.Items))
 
 	var trayData *trmm.TrayData
+	var trayErr error
 	if r.offline {
 		logging.Debugf("offline mode enabled; skipping Tactical RMM lookup")
 	} else {
 		options := trmm.DetectOptions()
 		logging.Debugf("detected Tactical RMM options: base=%s agentId=%s site=%d client=%d pk=%d", options.BaseURL, logging.MaskIdentifier(options.AgentID), options.SiteID, options.ClientID, options.AgentPK)
-		trayData, err = trmm.FetchTrayData(ctx, nil, options)
-		if err != nil {
-			log.Printf("Tactical RMM integration failed: %v", err)
+		trayData, trayErr = trmm.FetchTrayData(ctx, nil, options)
+		if trayErr != nil {
+			log.Printf("Tactical RMM integration failed: %v", trayErr)
 		}
 
 		if trayData != nil {
@@ -149,11 +151,18 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 		}
 	}
 
+	cachedItems := r.LatestItems()
+	cachedIcon := r.latestIcon()
+
 	items := make([]config.MenuItem, len(cfg.Items))
 	copy(items, cfg.Items)
+	EnsureSequentialOrder(&items)
 
 	seeded := false
-	if len(items) == 0 && (trayData == nil || len(trayData.MenuItems) == 0) {
+	fallbackToCached := trayErr != nil && len(items) == 0 && len(cachedItems) > 0
+	if fallbackToCached {
+		logging.Debugf("deferring to cached Tactical RMM menu items due to fetch error")
+	} else if len(items) == 0 && (trayData == nil || len(trayData.MenuItems) == 0) {
 		items = DefaultItems()
 		EnsureSequentialOrder(&items)
 		cfg.Items = make([]config.MenuItem, len(items))
@@ -164,7 +173,6 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 		seeded = true
 		logging.Debugf("seeded configuration with %d default items", len(items))
 	} else {
-		EnsureSequentialOrder(&items)
 		logging.Debugf("retaining %d menu items after local configuration sync", len(items))
 	}
 
@@ -175,19 +183,25 @@ func (r *Runner) syncOnce(ctx context.Context) error {
 			EnsureSequentialOrder(&items)
 			logging.Debugf("applying %d Tactical RMM menu items", len(items))
 		}
+	} else if fallbackToCached {
+		items = cachedItems
+		logging.Debugf("retaining %d cached Tactical RMM menu items after error", len(items))
 	}
 
 	var icon []byte
 	if trayData != nil && len(trayData.Icon) > 0 {
 		icon = trayData.Icon
 		logging.Debugf("using Tactical RMM provided icon (%d bytes)", len(icon))
+	} else if trayErr != nil && len(icon) == 0 && len(cachedIcon) > 0 {
+		icon = cachedIcon
+		logging.Debugf("retaining cached Tactical RMM icon after error")
 	}
 
 	r.setTrayState(items, icon)
 	if seeded {
 		log.Printf("GoTray created a fresh configuration with %d default items", len(items))
 	}
-	return nil
+	return trayErr
 }
 
 func (r *Runner) setTrayState(items []config.MenuItem, icon []byte) {
@@ -203,9 +217,16 @@ func (r *Runner) setTrayState(items []config.MenuItem, icon []byte) {
 	copy(r.lastItems, items)
 	r.lastDigest = digest
 	r.lastIconDigest = iconDigest
+	r.lastIcon = cloneIcon(icon)
 	r.mu.Unlock()
 	logging.Debugf("published tray state with %d items (digest=%s iconDigest=%s)", len(items), digest, iconDigest)
 	r.publish(items, icon)
+}
+
+func (r *Runner) latestIcon() []byte {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return cloneIcon(r.lastIcon)
 }
 
 func (r *Runner) requestRefresh() {

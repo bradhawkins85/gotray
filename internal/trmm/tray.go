@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -511,54 +512,167 @@ func joinURL(base, path string) (string, error) {
 }
 
 func getJSON(ctx context.Context, client *http.Client, endpoint, apiKey string, dest interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("X-API-KEY", apiKey)
-	logging.LogHTTPRequest(req, nil)
+	const maxAttempts = 3
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return err
-	}
-	logging.LogHTTPResponse(resp, body)
-
-	if resp.StatusCode == http.StatusNotFound {
-		return errNotFound
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet := strings.TrimSpace(string(body))
-		if snippet == "" {
-			snippet = resp.Status
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		return fmt.Errorf("request failed (%d): %s", resp.StatusCode, snippet)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("X-API-KEY", apiKey)
+		logging.LogHTTPRequest(req, nil)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			if shouldRetryRequest(err) && attempt < maxAttempts-1 {
+				lastErr = err
+				if sleepErr := sleepWithBackoff(ctx, attempt); sleepErr != nil {
+					return sleepErr
+				}
+				continue
+			}
+			return err
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if err != nil {
+			if shouldRetryRequest(err) && attempt < maxAttempts-1 {
+				lastErr = err
+				if sleepErr := sleepWithBackoff(ctx, attempt); sleepErr != nil {
+					return sleepErr
+				}
+				continue
+			}
+			return err
+		}
+		logging.LogHTTPResponse(resp, body)
+
+		if resp.StatusCode == http.StatusNotFound {
+			return errNotFound
+		}
+
+		if shouldRetryStatus(resp.StatusCode) && attempt < maxAttempts-1 {
+			snippet := strings.TrimSpace(string(body))
+			if snippet == "" {
+				snippet = resp.Status
+			}
+			lastErr = fmt.Errorf("request failed (%d): %s", resp.StatusCode, snippet)
+			if sleepErr := sleepWithBackoff(ctx, attempt); sleepErr != nil {
+				return sleepErr
+			}
+			continue
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			snippet := strings.TrimSpace(string(body))
+			if snippet == "" {
+				snippet = resp.Status
+			}
+			return fmt.Errorf("request failed (%d): %s", resp.StatusCode, snippet)
+		}
+
+		if len(body) == 0 {
+			return nil
+		}
+
+		// Some Tactical RMM endpoints wrap data in a "results" envelope.
+		if err := json.Unmarshal(body, dest); err == nil {
+			return nil
+		}
+		var wrapper struct {
+			Results json.RawMessage `json:"results"`
+		}
+		if err := json.Unmarshal(body, &wrapper); err != nil {
+			if shouldRetryRequest(err) && attempt < maxAttempts-1 {
+				lastErr = err
+				if sleepErr := sleepWithBackoff(ctx, attempt); sleepErr != nil {
+					return sleepErr
+				}
+				continue
+			}
+			return err
+		}
+		if len(wrapper.Results) == 0 {
+			return nil
+		}
+		if err := json.Unmarshal(wrapper.Results, dest); err != nil {
+			if shouldRetryRequest(err) && attempt < maxAttempts-1 {
+				lastErr = err
+				if sleepErr := sleepWithBackoff(ctx, attempt); sleepErr != nil {
+					return sleepErr
+				}
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return errors.New("request failed after retries")
+}
+
+func sleepWithBackoff(ctx context.Context, attempt int) error {
+	delay := time.Duration(attempt+1) * time.Second
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func shouldRetryRequest(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Timeout() {
+			return true
+		}
+		err = urlErr.Err
 	}
 
-	if len(body) == 0 {
-		return nil
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return true
+		}
+		if netErr.Temporary() {
+			return true
+		}
 	}
 
-	// Some Tactical RMM endpoints wrap data in a "results" envelope.
-	if err := json.Unmarshal(body, dest); err == nil {
-		return nil
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
 	}
-	var wrapper struct {
-		Results json.RawMessage `json:"results"`
+
+	return false
+}
+
+func shouldRetryStatus(status int) bool {
+	if status == http.StatusTooManyRequests {
+		return true
 	}
-	if err := json.Unmarshal(body, &wrapper); err != nil {
-		return err
+	if status >= 500 && status <= 599 {
+		return true
 	}
-	if len(wrapper.Results) == 0 {
-		return nil
-	}
-	return json.Unmarshal(wrapper.Results, dest)
+	return false
 }
 func findDefinition(defs []customFieldDefinition, model, name string) *customFieldDefinition {
 	for idx := range defs {

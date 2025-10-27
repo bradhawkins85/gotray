@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -21,6 +22,10 @@ type Endpoint struct {
 func DefaultEndpoint() Endpoint {
 	if addr := strings.TrimSpace(os.Getenv("GOTRAY_SERVICE_ADDR")); addr != "" {
 		return Endpoint{Network: "tcp", Address: addr}
+	}
+
+	if runtime.GOOS == "windows" {
+		return Endpoint{Network: "tcp", Address: defaultServicePort}
 	}
 
 	return Endpoint{Network: "tcp", Address: defaultServicePort}
